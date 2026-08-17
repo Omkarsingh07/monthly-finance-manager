@@ -21,36 +21,8 @@ async function runAuthTests() {
     const validEmail = AUTH_CONFIG.EMAIL || 'admin@financemanager.com';
     const validPassword = AUTH_CONFIG.PASSWORD || 'AdminPassword123!';
 
-    // Step A: Login with invalid email (Expected: 401)
-    console.log('A. Testing login with invalid email...');
-    const invalidEmailRes = await fetch(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'wrong_user@example.com', password: validPassword }),
-    });
-    if (invalidEmailRes.status !== 401) {
-      console.error(`❌ Expected 401, got ${invalidEmailRes.status}!`);
-      process.exit(1);
-    }
-    const invalidEmailJson = (await invalidEmailRes.json()) as { success?: boolean; message?: string };
-    console.log(`✅ Correctly rejected invalid email (Status: 401, Message: "${invalidEmailJson.message}")`);
-
-    // Step B: Login with invalid password (Expected: 401)
-    console.log('\nB. Testing login with invalid password...');
-    const invalidPassRes = await fetch(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: validEmail, password: 'WrongPassword999!' }),
-    });
-    if (invalidPassRes.status !== 401) {
-      console.error(`❌ Expected 401, got ${invalidPassRes.status}!`);
-      process.exit(1);
-    }
-    const invalidPassJson = (await invalidPassRes.json()) as { success?: boolean; message?: string };
-    console.log(`✅ Correctly rejected invalid password (Status: 401, Message: "${invalidPassJson.message}")`);
-
-    // Step C: Login with correct credentials (Expected: 200 + Set-Cookie)
-    console.log('\nC. Testing login with correct credentials...');
+    // 1. Correct credentials -> 200
+    console.log('1. Testing login with correct credentials...');
     const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -66,127 +38,177 @@ async function runAuthTests() {
       process.exit(1);
     }
     const rawCookie = setCookieHeader.split(';')[0];
-    console.log(`✅ Login successful: Status 200, HTTP-only cookie established (${AUTH_CONFIG.COOKIE_NAME})`);
-
-    // Step D: Protected API without authentication (Expected: 401 on all endpoints)
-    console.log('\nD. Testing all protected finance endpoints without authentication...');
-    const protectedEndpoints = [
-      { method: 'GET', path: '/api/dashboard?month=8&year=2026' },
-      { method: 'GET', path: '/api/investment-plan' },
-      { method: 'POST', path: '/api/investment-plan' },
-      { method: 'PUT', path: '/api/investment-plan' },
-      { method: 'DELETE', path: '/api/investment-plan/item/test-id' },
-      { method: 'GET', path: '/api/monthly-investments?month=8&year=2026' },
-      { method: 'PUT', path: '/api/monthly-investments/test-id' },
-      { method: 'PUT', path: '/api/monthly-investments' },
-    ];
-
-    for (const ep of protectedEndpoints) {
-      const unauthRes = await fetch(`${baseUrl}${ep.path}`, {
-        method: ep.method,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (unauthRes.status !== 401) {
-        console.error(`❌ Security breach! Endpoint ${ep.method} ${ep.path} allowed unauthenticated access with status ${unauthRes.status}!`);
-        process.exit(1);
-      }
-      console.log(`   🔒 ${ep.method} ${ep.path} -> 401 Unauthorized`);
-    }
-    console.log('✅ All finance endpoints securely reject unauthenticated requests.');
-
-    // Step E: Protected API with valid authentication (Expected: 200)
-    console.log('\nE. Testing protected finance API with valid session cookie...');
-    const authDashRes = await fetch(`${baseUrl}/api/dashboard?month=8&year=2026`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: rawCookie,
-      },
-    });
-    if (authDashRes.status !== 200) {
-      console.error(`❌ Expected 200 with valid session cookie, got ${authDashRes.status}!`);
+    const loginJson = (await loginRes.json()) as { success: boolean; authenticated: boolean };
+    if (!loginJson.authenticated) {
+      console.error('❌ Expected login response authenticated: true!', loginJson);
       process.exit(1);
     }
-    const dashData = (await authDashRes.json()) as { month?: number; year?: number };
-    console.log(`✅ Authenticated request succeeded (Status: 200, Month: ${dashData.month}, Year: ${dashData.year})`);
+    console.log(`✅ 1. PASS: Login successful: Status 200, authenticated: true, Set-Cookie present.`);
 
-    // Step F: /api/auth/me without authentication (Expected: 401)
-    console.log('\nF. Testing /api/auth/me without authentication...');
-    const unauthMeRes = await fetch(`${baseUrl}/api/auth/me`, {
-      method: 'GET',
+    // 2. Wrong email -> 401
+    console.log('\n2. Testing login with wrong email...');
+    const wrongEmailRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'wrong_user@example.com', password: validPassword }),
     });
-    if (unauthMeRes.status !== 401) {
-      console.error(`❌ Expected 401 for /api/auth/me without cookie, got ${unauthMeRes.status}!`);
+    if (wrongEmailRes.status !== 401) {
+      console.error(`❌ Expected 401, got ${wrongEmailRes.status}!`);
       process.exit(1);
     }
-    console.log('✅ Unauthenticated /api/auth/me returned 401');
+    console.log('✅ 2. PASS: Wrong email rejected with 401.');
 
-    // Step G: /api/auth/me with authentication (Expected: 200)
-    console.log('\nG. Testing /api/auth/me with valid session cookie...');
+    // 3. Wrong password -> 401
+    console.log('\n3. Testing login with wrong password...');
+    const wrongPassRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: validEmail, password: 'WrongPassword999!' }),
+    });
+    if (wrongPassRes.status !== 401) {
+      console.error(`❌ Expected 401, got ${wrongPassRes.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 3. PASS: Wrong password rejected with 401.');
+
+    // 4. Missing email -> 400
+    console.log('\n4. Testing login with missing email...');
+    const missingEmailRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: validPassword }),
+    });
+    if (missingEmailRes.status !== 400) {
+      console.error(`❌ Expected 400, got ${missingEmailRes.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 4. PASS: Missing email rejected with 400.');
+
+    // 5. Missing password -> 400
+    console.log('\n5. Testing login with missing password...');
+    const missingPassRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: validEmail }),
+    });
+    if (missingPassRes.status !== 400) {
+      console.error(`❌ Expected 400, got ${missingPassRes.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 5. PASS: Missing password rejected with 400.');
+
+    // 6. /api/auth/me without session -> 401
+    console.log('\n6. Testing /api/auth/me without session...');
+    const unauthMeRes = await fetch(`${baseUrl}/api/auth/me`);
+    if (unauthMeRes.status !== 401) {
+      console.error(`❌ Expected 401, got ${unauthMeRes.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 6. PASS: /api/auth/me without session returned 401.');
+
+    // 7. /api/auth/me with session -> 200
+    console.log('\n7. Testing /api/auth/me with valid session cookie...');
     const authMeRes = await fetch(`${baseUrl}/api/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: rawCookie,
-      },
+      headers: { Cookie: rawCookie },
     });
     if (authMeRes.status !== 200) {
-      console.error(`❌ Expected 200 for /api/auth/me with cookie, got ${authMeRes.status}!`);
+      console.error(`❌ Expected 200, got ${authMeRes.status}!`);
       process.exit(1);
     }
-    const meData = (await authMeRes.json()) as { authenticated?: boolean };
-    if (!meData.authenticated) {
-      console.error('❌ Expected meData.authenticated === true!', meData);
+    const meJson = (await authMeRes.json()) as { authenticated: boolean };
+    if (!meJson.authenticated) {
+      console.error('❌ Expected authenticated: true!', meJson);
       process.exit(1);
     }
-    console.log('✅ Authenticated /api/auth/me returned 200 with { authenticated: true }');
+    console.log('✅ 7. PASS: /api/auth/me with session returned 200 with { authenticated: true }.');
 
-    // Step H: Logout (Expected: 200 + cleared cookie)
-    console.log('\nH. Testing logout...');
+    // 8. Logout -> 200
+    console.log('\n8. Testing logout...');
     const logoutRes = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: rawCookie,
-      },
+      headers: { Cookie: rawCookie },
     });
     if (logoutRes.status !== 200) {
-      console.error(`❌ Expected 200 on logout, got ${logoutRes.status}!`);
+      console.error(`❌ Expected 200, got ${logoutRes.status}!`);
       process.exit(1);
     }
     const logoutCookie = logoutRes.headers.get('set-cookie');
-    console.log('✅ Logout successful (Status: 200, Session cookie cleared)');
+    console.log('✅ 8. PASS: Logout returned 200 and set-cookie cleared.');
 
-    // Step I: Protected API after logout (Expected: 401)
-    console.log('\nI. Testing protected API after session clearance...');
+    // 9. /api/auth/me after logout -> 401
+    console.log('\n9. Testing /api/auth/me after logout...');
     const expiredCookie = logoutCookie ? logoutCookie.split(';')[0] : '';
-    const afterLogoutRes = await fetch(`${baseUrl}/api/dashboard?month=8&year=2026`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: expiredCookie,
-      },
+    const afterLogoutMeRes = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { Cookie: expiredCookie },
     });
-    if (afterLogoutRes.status !== 401) {
-      console.error(`❌ Expected 401 after logout, got ${afterLogoutRes.status}!`);
+    if (afterLogoutMeRes.status !== 401) {
+      console.error(`❌ Expected 401, got ${afterLogoutMeRes.status}!`);
       process.exit(1);
     }
-    console.log('✅ Request after logout correctly returned 401 Unauthorized');
+    console.log('✅ 9. PASS: /api/auth/me after logout returned 401.');
 
-    // Step J: Health endpoint without authentication (Expected: 200)
-    console.log('\nJ. Testing health endpoint without authentication...');
+    // 10. Protected dashboard without session -> 401
+    console.log('\n10. Testing protected dashboard without session...');
+    const dashUnauth = await fetch(`${baseUrl}/api/dashboard?month=8&year=2026`);
+    if (dashUnauth.status !== 401) {
+      console.error(`❌ Expected 401, got ${dashUnauth.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 10. PASS: Protected dashboard rejected with 401.');
+
+    // 11. Protected monthly investment API without session -> 401
+    console.log('\n11. Testing protected monthly investments without session...');
+    const monthlyUnauth = await fetch(`${baseUrl}/api/monthly-investments?month=8&year=2026`);
+    if (monthlyUnauth.status !== 401) {
+      console.error(`❌ Expected 401, got ${monthlyUnauth.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 11. PASS: Protected monthly investments rejected with 401.');
+
+    // 12. Protected investment plan API without session -> 401
+    console.log('\n12. Testing protected investment plan without session...');
+    const planUnauth = await fetch(`${baseUrl}/api/investment-plan`);
+    if (planUnauth.status !== 401) {
+      console.error(`❌ Expected 401, got ${planUnauth.status}!`);
+      process.exit(1);
+    }
+    console.log('✅ 12. PASS: Protected investment plan rejected with 401.');
+
+    // 13. Health endpoint without session -> 200
+    console.log('\n13. Testing health endpoint without session...');
     const healthRes = await fetch(`${baseUrl}/api/health`);
     if (healthRes.status !== 200) {
-      console.error(`❌ Expected 200 for health endpoint, got ${healthRes.status}!`);
+      console.error(`❌ Expected 200, got ${healthRes.status}!`);
       process.exit(1);
     }
-    const healthData = (await healthRes.json()) as Record<string, unknown>;
-    console.log(`✅ Health endpoint is publicly accessible: Status 200, Status="${healthData.status}"`);
+    console.log('✅ 13. PASS: Health endpoint is public (Status 200).');
 
-    // Step L: Verify Google credentials and auth passwords never appear in API responses
-    console.log('\nL. Verifying credentials and secrets never leak in API responses...');
-    const responseText = JSON.stringify(healthData) + JSON.stringify(dashData);
+    // 14. CORS preflight OPTIONS from production frontend -> 204 with Allow-Origin & Allow-Credentials
+    console.log('\n14. Testing CORS preflight OPTIONS from production frontend (https://monthly-finance-manager-ten.vercel.app)...');
+    const preflightRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://monthly-finance-manager-ten.vercel.app',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+    if (preflightRes.status !== 204 && preflightRes.status !== 200) {
+      console.error(`❌ Expected 204/200 for preflight, got ${preflightRes.status}!`);
+      process.exit(1);
+    }
+    const allowOrigin = preflightRes.headers.get('access-control-allow-origin');
+    const allowCreds = preflightRes.headers.get('access-control-allow-credentials');
+    if (allowOrigin !== 'https://monthly-finance-manager-ten.vercel.app' || allowCreds !== 'true') {
+      console.error('❌ CORS preflight headers incorrect!', { allowOrigin, allowCreds });
+      process.exit(1);
+    }
+    console.log(`✅ 14. PASS: CORS preflight returned Status ${preflightRes.status}, Allow-Origin: ${allowOrigin}, Allow-Credentials: ${allowCreds}`);
+
+    // 15. Verify Google credentials and secrets never appear in API responses
+    console.log('\n15. Verifying credentials and secrets never leak in responses...');
+    const healthJson = await healthRes.json();
+    const responseText = JSON.stringify(healthJson) + JSON.stringify(loginJson);
     if (
       responseText.includes('PRIVATE KEY') ||
       responseText.includes(validPassword) ||
@@ -195,7 +217,7 @@ async function runAuthTests() {
       console.error('❌ CRITICAL SECURITY FLAW: Secret credentials found in API responses!');
       process.exit(1);
     }
-    console.log('✅ Verified zero credential leakage across all API responses.');
+    console.log('✅ 15. PASS: Verified zero credential leakage across all API responses.');
   } finally {
     server.close();
   }

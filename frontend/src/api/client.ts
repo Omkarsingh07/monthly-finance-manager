@@ -38,7 +38,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       const isAuthEndpoint =
         error.config?.url?.includes('/auth/login') ||
-        error.config?.url?.includes('/auth/me');
+        error.config?.url?.includes('/auth/me') ||
+        error.config?.url?.includes('/auth/logout');
 
       // If unauthorized on protected route and not already on /login, redirect
       if (!isAuthEndpoint && window.location.pathname !== '/login') {

@@ -9,6 +9,7 @@ export class AuthController {
    * POST /api/auth/login
    */
   async login(req: Request, res: Response): Promise<void> {
+    console.log('[auth] Login attempt received');
     const parseResult = LoginSchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({
@@ -24,7 +25,7 @@ export class AuthController {
     if (!isValid) {
       res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: 'Invalid email or password',
       });
       return;
     }
@@ -37,7 +38,7 @@ export class AuthController {
 
     res.status(200).json({
       success: true,
-      message: 'Logged in successfully',
+      authenticated: true,
     });
   }
 
@@ -45,12 +46,12 @@ export class AuthController {
    * POST /api/auth/logout
    */
   async logout(req: Request, res: Response): Promise<void> {
+    console.log('[auth] Logout requested');
     const cookieOptions = getSessionCookieOptions();
     res.clearCookie(AUTH_CONFIG.COOKIE_NAME, cookieOptions);
 
     res.status(200).json({
       success: true,
-      message: 'Logged out successfully',
     });
   }
 
@@ -73,6 +74,7 @@ export class AuthController {
 
     const session = authService.verifySessionToken(token);
     if (!session) {
+      console.log('[auth] /api/auth/me: Invalid or expired session');
       res.status(401).json({
         success: false,
         authenticated: false,
@@ -80,6 +82,7 @@ export class AuthController {
       return;
     }
 
+    console.log(`[auth] /api/auth/me: Session validated for ${session.email}`);
     res.status(200).json({
       success: true,
       authenticated: true,

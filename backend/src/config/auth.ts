@@ -2,13 +2,69 @@
 import 'dotenv/config';
 import type { CookieOptions } from 'express';
 
+/**
+ * Sanitizes an environment variable by trimming whitespace and removing surrounding quotes.
+ */
+function cleanEnv(val: string | undefined): string {
+  if (!val) return '';
+  return val.trim().replace(/^["']|["']$/g, '');
+}
+
 export const AUTH_CONFIG = {
-  EMAIL: (process.env.AUTH_EMAIL || '').trim().toLowerCase(),
-  PASSWORD: process.env.AUTH_PASSWORD || '',
-  SESSION_SECRET: process.env.SESSION_SECRET || 'dev_session_secret_for_local_testing_only',
+  get EMAIL(): string {
+    return cleanEnv(process.env.AUTH_EMAIL).toLowerCase();
+  },
+  get PASSWORD(): string {
+    return cleanEnv(process.env.AUTH_PASSWORD);
+  },
+  get SESSION_SECRET(): string {
+    return cleanEnv(process.env.SESSION_SECRET) || 'fallback_dev_session_secret_local_only';
+  },
+  get FRONTEND_URL(): string {
+    const raw = cleanEnv(process.env.FRONTEND_URL);
+    return raw ? raw.replace(/\/+$/, '') : '';
+  },
   COOKIE_NAME: 'fm_session',
   COOKIE_MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
 };
+
+/**
+ * Validates authentication and environment configuration at startup.
+ * Logs safe diagnostic status without revealing secrets.
+ */
+export function validateAuthConfig(): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  const hasEmail = Boolean(AUTH_CONFIG.EMAIL);
+  const hasPassword = Boolean(AUTH_CONFIG.PASSWORD);
+  const hasSecret = Boolean(cleanEnv(process.env.SESSION_SECRET));
+  const hasFrontendUrl = Boolean(AUTH_CONFIG.FRONTEND_URL);
+
+  console.log('[auth] --- Authentication & CORS Diagnostic ---');
+  console.log(`[auth] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`[auth] AUTH_EMAIL configured: ${hasEmail}`);
+  console.log(`[auth] AUTH_PASSWORD configured: ${hasPassword}`);
+  console.log(`[auth] SESSION_SECRET configured: ${hasSecret}`);
+  console.log(`[cors] FRONTEND_URL configured: ${hasFrontendUrl}`);
+  if (hasFrontendUrl) {
+    console.log(`[cors] Configured FRONTEND_URL: ${AUTH_CONFIG.FRONTEND_URL}`);
+  }
+
+  if (isProduction) {
+    if (!hasEmail) {
+      console.error('❌ Missing required authentication environment variable: AUTH_EMAIL');
+    }
+    if (!hasPassword) {
+      console.error('❌ Missing required authentication environment variable: AUTH_PASSWORD');
+    }
+    if (!hasSecret) {
+      console.error('❌ Missing required authentication environment variable: SESSION_SECRET');
+    }
+    if (!hasFrontendUrl) {
+      console.warn('⚠️ FRONTEND_URL is not set in production. CORS might restrict frontend requests.');
+    }
+  }
+}
 
 /**
  * Generates cookie options appropriate for the runtime environment.

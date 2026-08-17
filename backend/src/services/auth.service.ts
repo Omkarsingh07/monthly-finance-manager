@@ -14,16 +14,27 @@ export class AuthService {
    * Verifies login credentials against environment variables.
    */
   verifyCredentials(email: string, password: string): boolean {
-    if (!AUTH_CONFIG.EMAIL || !AUTH_CONFIG.PASSWORD) {
+    const configuredEmail = AUTH_CONFIG.EMAIL;
+    const configuredPassword = AUTH_CONFIG.PASSWORD;
+
+    if (!configuredEmail || !configuredPassword) {
       console.warn('[auth] AUTH_EMAIL or AUTH_PASSWORD is not set in environment variables!');
       return false;
     }
 
-    const normalizedInputEmail = (email || '').trim().toLowerCase();
-    const isEmailValid = normalizedInputEmail === AUTH_CONFIG.EMAIL;
-    const isPasswordValid = password === AUTH_CONFIG.PASSWORD;
+    const inputEmail = (email || '').trim().toLowerCase();
+    const inputPassword = (password || '').trim();
 
-    return isEmailValid && isPasswordValid;
+    const isEmailValid = inputEmail === configuredEmail;
+    const isPasswordValid = inputPassword === configuredPassword;
+
+    if (isEmailValid && isPasswordValid) {
+      console.log(`[auth] Credentials accepted for: ${inputEmail}`);
+      return true;
+    } else {
+      console.log(`[auth] Credentials rejected for: ${inputEmail} (Email match: ${isEmailValid}, Password match: ${isPasswordValid})`);
+      return false;
+    }
   }
 
   /**
@@ -36,9 +47,12 @@ export class AuthService {
       jti: uuidv4(),
     };
 
-    return jwt.sign(payload, AUTH_CONFIG.SESSION_SECRET, {
+    const token = jwt.sign(payload, AUTH_CONFIG.SESSION_SECRET, {
       expiresIn: '7d',
     });
+
+    console.log(`[auth] Session created for: ${payload.email}`);
+    return token;
   }
 
   /**
