@@ -7,6 +7,7 @@ import { LoadingState } from '../components/shared/LoadingState';
 import { ErrorState } from '../components/shared/ErrorState';
 import { EmptyState } from '../components/shared/EmptyState';
 import { formatINR } from '../utils/format';
+import { getErrorMessage } from '../utils/error';
 
 export default function Investments() {
   const now = new Date();
@@ -34,13 +35,9 @@ export default function Investments() {
       });
       setActualInputs(initialInputs);
       setInputErrors({});
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Investments] Failed to fetch monthly investments:', err);
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          'Unable to load investments from server.'
-      );
+      setError(getErrorMessage(err, 'Unable to load investments from server.'));
       setData(null);
     } finally {
       setLoading(false);
@@ -106,13 +103,9 @@ export default function Investments() {
       setTimeout(() => {
         setSaveStatus('idle');
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Investments] Failed to save investments:', err);
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          'Failed to save investments to Google Sheets.'
-      );
+      setError(getErrorMessage(err, 'Failed to save investments to Google Sheets.'));
       setSaveStatus('idle');
     } finally {
       setSaving(false);

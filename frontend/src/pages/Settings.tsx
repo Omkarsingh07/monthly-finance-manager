@@ -4,6 +4,7 @@ import { getInvestmentPlan, saveInvestmentPlan } from '../api/investmentPlan';
 import type { InvestmentCategory } from '../types/api';
 import { LoadingState } from '../components/shared/LoadingState';
 import { ErrorState } from '../components/shared/ErrorState';
+import { getErrorMessage } from '../utils/error';
 
 interface EditablePlanItem {
   id?: string;
@@ -61,13 +62,9 @@ export default function Settings() {
         setMonthlyAmount(0);
         setItems([{ name: '', category: 'ETF', weightage: 0 }]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Settings] Failed to fetch investment plan:', err);
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          'Unable to load settings from server.'
-      );
+      setError(getErrorMessage(err, 'Unable to load settings from server.'));
     } finally {
       setLoading(false);
     }
@@ -145,13 +142,9 @@ export default function Settings() {
       setTimeout(() => {
         setSaveStatus('idle');
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Settings] Failed to save plan:', err);
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          'Failed to save investment plan.'
-      );
+      setError(getErrorMessage(err, 'Failed to save investment plan.'));
     } finally {
       setSaving(false);
     }

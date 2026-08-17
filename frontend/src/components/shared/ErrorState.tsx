@@ -2,7 +2,7 @@
 import React from 'react';
 
 interface ErrorStateProps {
-  message?: string;
+  message?: string | unknown;
   onRetry?: () => void;
 }
 
@@ -10,6 +10,13 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   message = 'Unable to load your financial data.',
   onRetry,
 }) => {
+  const displayMessage =
+    typeof message === 'string'
+      ? message
+      : message && typeof message === 'object' && 'message' in (message as any)
+      ? String((message as any).message)
+      : 'Unable to load your financial data from server.';
+
   return (
     <div
       className="p-8 rounded-2xl bg-[var(--danger-subtle)] border border-[var(--danger)]/20 text-center space-y-4 shadow-xs"
@@ -23,7 +30,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
 
       <div className="space-y-1">
         <h3 className="text-base font-semibold text-[var(--text-primary)]">Connection Issue</h3>
-        <p className="text-sm text-[var(--text-secondary)] max-w-md mx-auto">{message}</p>
+        <p className="text-sm text-[var(--text-secondary)] max-w-md mx-auto">{displayMessage}</p>
       </div>
 
       {onRetry && (

@@ -8,6 +8,7 @@ import { MonthYearSelector } from '../components/shared/MonthYearSelector';
 import { LoadingState } from '../components/shared/LoadingState';
 import { ErrorState } from '../components/shared/ErrorState';
 import { EmptyState } from '../components/shared/EmptyState';
+import { getErrorMessage } from '../utils/error';
 
 export default function Dashboard() {
   const now = new Date();
@@ -23,13 +24,9 @@ export default function Dashboard() {
     try {
       const response = await getDashboard(month, year);
       setData(response);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Dashboard] Failed to fetch dashboard:', err);
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          'Unable to load your financial data from server.'
-      );
+      setError(getErrorMessage(err, 'Unable to load your financial data from server.'));
       setData(null);
     } finally {
       setLoading(false);
