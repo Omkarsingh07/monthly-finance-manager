@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-app: #F5F5F7;
+    --bg-surface: #FFFFFF;
+    --bg-surface-elevated: #FBFBFD;
+    --bg-surface-subtle: #F0F0F2;
+    --border-subtle: #E5E5EA;
+    --border-strong: #D1D1D6;
+    --text-primary: #1D1D1F;
+    --text-secondary: #86868B;
+    --text-tertiary: #A1A1A6;
+    --accent: #0071E3;
+    --accent-hover: #0077ED;
+    --accent-subtle: #E8F2FF;
+    --accent-text: #0071E3;
+    --success: #34C759;
+    --success-subtle: #E8F8ED;
+    --warning: #FF9500;
+    --warning-subtle: #FFF4E5;
+    --danger: #FF3B30;
+    --danger-subtle: #FFEBEA;
+    --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark {
+    --bg-app: #0B0D10;
+    --bg-surface: #111418;
+    --bg-surface-elevated: #171B21;
+    --bg-surface-subtle: #1C2128;
+    --border-subtle: #242A32;
+    --border-strong: #323A46;
+    --text-primary: #F5F5F7;
+    --text-secondary: #86868B;
+    --text-tertiary: #6E6E73;
+    --accent: #2997FF;
+    --accent-hover: #0A84FF;
+    --accent-subtle: #0B2545;
+    --accent-text: #2997FF;
+    --success: #30D158;
+    --success-subtle: #0A2E16;
+    --warning: #FF9F0A;
+    --warning-subtle: #331F00;
+    --danger: #FF453A;
+    --danger-subtle: #330C0A;
+    --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-elevated: 0 8px 28px rgba(0, 0, 0, 0.6);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    min-height: 100%;
+    margin: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Tabular numbers for financial data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Apple styled skeleton pulse */
+@keyframes applePulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.apple-skeleton {
+  background-color: var(--border-subtle);
+  animation: applePulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apple-skeleton {
+    animation: none;
+    opacity: 0.6;
+  }
+  * {
+    transition: none !important;
+  }
+}
