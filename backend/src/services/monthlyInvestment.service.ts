@@ -10,6 +10,8 @@ export interface MonthlyInvestmentItem {
   name: string;
   category: string;
   weightage: number;
+  normalPlannedAmount: number;
+  previousMonthPending: number;
   plannedAmount: number;
   actualAmount: number;
 }
@@ -126,40 +128,58 @@ export class MonthlyInvestmentService {
   }
 
   /**
-   * Recursively computes carry forward in-memory using pre-fetched datasets.
-   * Eliminates unnecessary Google Sheets API roundtrips.
+   * Recursively computes investment-level targets and pending amounts in-memory using pre-fetched datasets.
+   * Tracking per planInvestmentId ensures each investment carries over its own pending amount.
    */
-  private computeCarryForwardInMemory(
+  private computeInvestmentTargetsInMemory(
     month: number,
     year: number,
     allMonthly: Array<{ rowIndex: number; record: MonthlyInvestmentRecord }>,
     histories: PlanHistoryRecord[],
     allPlanItems: Array<{ rowIndex: number; record: InvestmentPlanRecord }>,
     visited: Set<string> = new Set()
-  ): number {
+  ): Map<string, { normalPlannedAmount: number; previousMonthPending: number; plannedAmount: number }> {
     const key = `${year}-${month}`;
-    if (visited.has(key)) return 0;
+    if (visited.has(key)) {
+      return new Map();
+    }
     visited.add(key);
+
+    const activePlan = this.resolveActivePlanInMemory(month, year, histories, allPlanItems);
+    if (!activePlan || activePlan.investments.length === 0) {
+      return new Map();
+    }
+
+    // 1. Calculate normal planned allocation for this month
+    const normalAllocationsMap = calculatePlannedAllocations(activePlan.monthlyAmount, activePlan.investments);
 
     const prev = this.getPreviousMonthRef(month, year);
     const prevPlan = this.resolveActivePlanInMemory(prev.month, prev.year, histories, allPlanItems);
 
-    if (!prevPlan) {
-      return 0; // No plan existed in previous month
-    }
+    const result = new Map<string, { normalPlannedAmount: number; previousMonthPending: number; plannedAmount: number }>();
 
-    // Check if there is any history on or before prev month
+    // Check if there is any history on or before previous month
     const hasHistory = allMonthly.some(
       (m) =>
         m.record.year < prev.year ||
         (m.record.year === prev.year && m.record.month <= prev.month)
     );
 
-    if (!hasHistory) {
-      return 0;
+    if (!prevPlan || !hasHistory) {
+      // Base case: No previous month history or plan
+      for (const item of activePlan.investments) {
+        const normal = normalAllocationsMap.get(item.id) ?? 0;
+        result.set(item.id, {
+          normalPlannedAmount: normal,
+          previousMonthPending: 0,
+          plannedAmount: normal,
+        });
+      }
+      return result;
     }
 
-    const prevCarryForward = this.computeCarryForwardInMemory(
+    // 2. Recursively resolve previous month's investment-level targets
+    const prevTargetsMap = this.computeInvestmentTargetsInMemory(
       prev.month,
       prev.year,
       allMonthly,
@@ -168,26 +188,44 @@ export class MonthlyInvestmentService {
       visited
     );
 
-    const prevTarget = roundMoney(prevPlan.monthlyAmount + prevCarryForward);
-    const prevRecords = allMonthly.filter(
-      (m) => m.record.year === prev.year && m.record.month === prev.month
-    );
-    const prevActual = sumMoney(prevRecords.map((m) => m.record.actualAmount));
+    // Map previous month actual investments by planInvestmentId
+    const prevActualsMap = new Map<string, number>();
+    allMonthly
+      .filter((m) => m.record.year === prev.year && m.record.month === prev.month)
+      .forEach((m) => {
+        prevActualsMap.set(m.record.planInvestmentId, m.record.actualAmount);
+      });
 
-    return Math.max(roundMoney(prevTarget - prevActual), 0);
+    // 3. For each active investment item, calculate investment-level pending and target
+    for (const item of activePlan.investments) {
+      const normal = normalAllocationsMap.get(item.id) ?? 0;
+      const prevTargetInfo = prevTargetsMap.get(item.id);
+
+      let pending = 0;
+      if (prevTargetInfo) {
+        const prevPlanned = prevTargetInfo.plannedAmount;
+        const prevActual = prevActualsMap.get(item.id) ?? 0;
+        // Pending = MAX(Previous Planned - Previous Actual, 0)
+        pending = Math.max(roundMoney(prevPlanned - prevActual), 0);
+      }
+
+      const totalPlanned = roundMoney(normal + pending);
+      result.set(item.id, {
+        normalPlannedAmount: normal,
+        previousMonthPending: pending,
+        plannedAmount: totalPlanned,
+      });
+    }
+
+    return result;
   }
 
   /**
    * Calculates carry forward for a given month and year from Google Sheets data.
    */
   async calculateCarryForward(month: number, year: number): Promise<number> {
-    const [allMonthly, histories, allPlanItems] = await Promise.all([
-      this.getAllMonthlyInvestments(),
-      investmentPlanService.getPlanHistories(),
-      investmentPlanService.getAllPlanItems(),
-    ]);
-
-    return this.computeCarryForwardInMemory(month, year, allMonthly, histories, allPlanItems);
+    const breakdown = await this.getMonthlyBreakdown(month, year);
+    return breakdown.previousCarryForward;
   }
 
   /**
@@ -217,18 +255,16 @@ export class MonthlyInvestmentService {
       };
     }
 
-    const previousCarryForward = this.computeCarryForwardInMemory(
+    // Compute investment-level targets with individual carry-forward
+    const targetMap = this.computeInvestmentTargetsInMemory(
       month,
       year,
       allMonthly,
       histories,
       allPlanItems
     );
-    const baseMonthlyAmount = activePlan.monthlyAmount;
-    const currentMonthTarget = roundMoney(baseMonthlyAmount + previousCarryForward);
 
-    // Planned amounts calculated from currentMonthTarget * weightage / 100
-    const plannedMap = calculatePlannedAllocations(currentMonthTarget, activePlan.investments);
+    const baseMonthlyAmount = activePlan.monthlyAmount;
 
     const currentMonthRecords = allMonthly.filter(
       (m) => m.record.year === year && m.record.month === month
@@ -240,18 +276,27 @@ export class MonthlyInvestmentService {
     });
 
     const investments: MonthlyInvestmentItem[] = activePlan.investments.map((planItem) => {
-      const planned = plannedMap.get(planItem.id) ?? 0;
+      const targetInfo = targetMap.get(planItem.id) ?? {
+        normalPlannedAmount: 0,
+        previousMonthPending: 0,
+        plannedAmount: 0,
+      };
       const actual = actualMap.get(planItem.id) ?? 0;
+
       return {
         id: planItem.id,
         name: planItem.name,
         category: planItem.category,
         weightage: planItem.weightage,
-        plannedAmount: planned,
+        normalPlannedAmount: targetInfo.normalPlannedAmount,
+        previousMonthPending: targetInfo.previousMonthPending,
+        plannedAmount: targetInfo.plannedAmount,
         actualAmount: actual,
       };
     });
 
+    const previousCarryForward = sumMoney(investments.map((i) => i.previousMonthPending));
+    const currentMonthTarget = sumMoney(investments.map((i) => i.plannedAmount));
     const currentMonthActual = sumMoney(investments.map((i) => i.actualAmount));
     const currentMonthRemaining = Math.max(roundMoney(currentMonthTarget - currentMonthActual), 0);
 

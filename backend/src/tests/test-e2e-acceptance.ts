@@ -9,7 +9,7 @@ import { SaveInvestmentPlanSchema } from '../validators/investmentPlan.validator
 
 async function runE2EAcceptanceSuite() {
   console.log('================================================================');
-  console.log('  PHASE E — FULL END-TO-END ACCEPTANCE TEST SUITE');
+  console.log('  FULL END-TO-END ACCEPTANCE TEST SUITE');
   console.log('  Testing complete workflow against REAL Google Spreadsheet');
   console.log('================================================================\n');
 
@@ -39,7 +39,7 @@ async function runE2EAcceptanceSuite() {
     });
 
     const [nifty, next50, midcap, smallcap] = plan.investments;
-    console.log(`✅ Saved Canonical Plan:`);
+    console.log(`✅ Saved Plan:`);
     console.log(`   - Version: ${plan.planVersion}`);
     console.log(`   - Monthly Amount: ₹${plan.monthlyAmount}`);
     console.log(`   - Nifty 50 ETF (40%): ID=${nifty.id}`);
@@ -85,7 +85,12 @@ async function runE2EAcceptanceSuite() {
     }
     console.log('✅ July Initial State PASS.\n');
 
-    // Step 5: July 2026 Enter Actual Investments (500 + 400 + 400 + 200 = 1500)
+    // Step 5: July 2026 Enter Actual Investments:
+    // Nifty: planned 800, actual 500 -> pending 300
+    // Next50: planned 500, actual 400 -> pending 100
+    // Midcap: planned 400, actual 400 -> pending 0
+    // Smallcap: planned 300, actual 200 -> pending 100
+    // Total Actual = 1500, Total Pending = 500
     console.log('5. JULY 2026 — ENTER ACTUAL INVESTMENTS (500 + 400 + 400 + 200 = ₹1,500)...');
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 7, 500);
     await monthlyInvestmentService.upsertActualAmount(next50.id, 2026, 7, 400);
@@ -134,36 +139,45 @@ async function runE2EAcceptanceSuite() {
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 7, 500);
     console.log('✅ Restored July Nifty to canonical ₹500.\n');
 
-    // Step 7: August 2026 Carry Forward & Planned Allocations
-    console.log('7. AUGUST 2026 — CARRY FORWARD & PLANNED ALLOCATIONS...');
+    // Step 7: August 2026 PER-INVESTMENT Carry Forward & Planned Targets
+    // Nifty: 800 normal + 300 pending = 1100 target
+    // Next50: 500 normal + 100 pending = 600 target
+    // Midcap: 400 normal + 0 pending = 400 target
+    // Smallcap: 300 normal + 100 pending = 400 target
+    // Total Target = 1100 + 600 + 400 + 400 = 2500
+    console.log('7. AUGUST 2026 — PER-INVESTMENT CARRY FORWARD & TARGETS...');
     const augustInitial = await dashboardService.getDashboard(8, 2026);
     console.log(`   - August Base: ₹${augustInitial.baseMonthlyAmount} (Expected: 2000)`);
     console.log(`   - Previous Carry Forward: ₹${augustInitial.previousCarryForward} (Expected: 500)`);
     console.log(`   - August Target: ₹${augustInitial.currentMonthTarget} (Expected: 2500)`);
 
-    const pNifty = augustInitial.investments.find((i) => i.id === nifty.id)?.plannedAmount;
-    const pNext50 = augustInitial.investments.find((i) => i.id === next50.id)?.plannedAmount;
-    const pMidcap = augustInitial.investments.find((i) => i.id === midcap.id)?.plannedAmount;
-    const pSmallcap = augustInitial.investments.find((i) => i.id === smallcap.id)?.plannedAmount;
+    const pNifty = augustInitial.investments.find((i) => i.id === nifty.id);
+    const pNext50 = augustInitial.investments.find((i) => i.id === next50.id);
+    const pMidcap = augustInitial.investments.find((i) => i.id === midcap.id);
+    const pSmallcap = augustInitial.investments.find((i) => i.id === smallcap.id);
 
-    console.log(`   Planned Amounts (Calculated by Backend):`);
-    console.log(`   - Nifty 50 ETF (40%): ₹${pNifty} (Expected: 1000)`);
-    console.log(`   - Next 50 ETF (25%): ₹${pNext50} (Expected: 625)`);
-    console.log(`   - Midcap ETF (20%): ₹${pMidcap} (Expected: 500)`);
-    console.log(`   - Smallcap ETF (15%): ₹${pSmallcap} (Expected: 375)`);
+    console.log(`   Per-Investment Planned Targets (Calculated by Backend):`);
+    console.log(`   - Nifty 50 ETF: Normal=₹${pNifty?.normalPlannedAmount}, Pending=₹${pNifty?.previousMonthPending}, Target=₹${pNifty?.plannedAmount} (Expected: 1100)`);
+    console.log(`   - Next 50 ETF:  Normal=₹${pNext50?.normalPlannedAmount}, Pending=₹${pNext50?.previousMonthPending}, Target=₹${pNext50?.plannedAmount} (Expected: 600)`);
+    console.log(`   - Midcap ETF:   Normal=₹${pMidcap?.normalPlannedAmount}, Pending=₹${pMidcap?.previousMonthPending}, Target=₹${pMidcap?.plannedAmount} (Expected: 400)`);
+    console.log(`   - Smallcap ETF: Normal=₹${pSmallcap?.normalPlannedAmount}, Pending=₹${pSmallcap?.previousMonthPending}, Target=₹${pSmallcap?.plannedAmount} (Expected: 400)`);
 
     if (
       augustInitial.previousCarryForward !== 500 ||
       augustInitial.currentMonthTarget !== 2500 ||
-      pNifty !== 1000 ||
-      pNext50 !== 625 ||
-      pMidcap !== 500 ||
-      pSmallcap !== 375
+      pNifty?.plannedAmount !== 1100 ||
+      pNifty?.previousMonthPending !== 300 ||
+      pNext50?.plannedAmount !== 600 ||
+      pNext50?.previousMonthPending !== 100 ||
+      pMidcap?.plannedAmount !== 400 ||
+      pMidcap?.previousMonthPending !== 0 ||
+      pSmallcap?.plannedAmount !== 400 ||
+      pSmallcap?.previousMonthPending !== 100
     ) {
-      console.error('❌ August Carry Forward & Planned Allocations check failed!', augustInitial);
+      console.error('❌ August Per-Investment Carry Forward & Planned Targets check failed!', augustInitial);
       process.exit(1);
     }
-    console.log('✅ August Carry Forward & Planned Allocations PASS.\n');
+    console.log('✅ August Per-Investment Carry Forward & Planned Targets PASS.\n');
 
     // Step 8: August 2026 Enter Actual Investments (500 + 500 + 500 + 0 = 1500)
     console.log('8. AUGUST 2026 — ENTER ACTUAL INVESTMENTS (500 + 500 + 500 + 0 = ₹1,500)...');
@@ -174,7 +188,7 @@ async function runE2EAcceptanceSuite() {
 
     const augustFinal = await dashboardService.getDashboard(8, 2026);
     console.log(`   - Total Investment: ₹${augustFinal.totalInvestment} (Expected: 3000 = 1500 July + 1500 Aug)`);
-    console.log(`   - This Month Investment: ₹${augustFinal.currentMonthTarget} (Expected: 2500)`);
+    console.log(`   - This Month Target: ₹${augustFinal.currentMonthTarget} (Expected: 2500)`);
     console.log(`   - This Month Remaining: ₹${augustFinal.currentMonthRemaining} (Expected: 1000)`);
 
     if (
@@ -209,8 +223,13 @@ async function runE2EAcceptanceSuite() {
     console.log('✅ Restored August Nifty to canonical ₹500.\n');
 
     // Step 10: Over-Investment Test
-    console.log('10. OVER-INVESTMENT TEST (August actual = 2800 on 2500 target)...');
-    await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 8, 1800); // 1300 over
+    // In August, targets were: Nifty 1100, Next50 600, Midcap 400, Smallcap 400
+    // Set August actuals: Nifty 1500 (over), Next50 600 (full), Midcap 400 (full), Smallcap 400 (full)
+    console.log('10. OVER-INVESTMENT TEST (August actual = 2900 on 2500 target: Nifty=1500, Next50=600, Midcap=400, Smallcap=400)...');
+    await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 8, 1500);
+    await monthlyInvestmentService.upsertActualAmount(next50.id, 2026, 8, 600);
+    await monthlyInvestmentService.upsertActualAmount(midcap.id, 2026, 8, 400);
+    await monthlyInvestmentService.upsertActualAmount(smallcap.id, 2026, 8, 400);
 
     const augOver = await dashboardService.getDashboard(8, 2026);
     console.log(`   - August Remaining on Over-Investment: ₹${augOver.currentMonthRemaining} (Expected: 0, never negative)`);
@@ -220,16 +239,30 @@ async function runE2EAcceptanceSuite() {
     }
 
     const sepAfterOver = await dashboardService.getDashboard(9, 2026);
-    console.log(`   - September Target after August Over-Investment: ₹${sepAfterOver.currentMonthTarget} (Expected: 2000, not reduced)`);
-    console.log(`   - September Carry Forward: ₹${sepAfterOver.previousCarryForward} (Expected: 0)`);
-    if (sepAfterOver.currentMonthTarget !== 2000 || sepAfterOver.previousCarryForward !== 0) {
+    const sepNifty = sepAfterOver.investments.find((i) => i.id === nifty.id);
+    const sepNext50 = sepAfterOver.investments.find((i) => i.id === next50.id);
+
+    console.log(`   - September Targets after August Full/Over Investments:`);
+    console.log(`     Nifty Target:    ₹${sepNifty?.plannedAmount} (Expected: 800, not reduced)`);
+    console.log(`     Next50 Target:   ₹${sepNext50?.plannedAmount} (Expected: 500)`);
+    console.log(`     Total Target:    ₹${sepAfterOver.currentMonthTarget} (Expected: 2000)`);
+    console.log(`     Carry Forward:   ₹${sepAfterOver.previousCarryForward} (Expected: 0)`);
+
+    if (
+      sepAfterOver.currentMonthTarget !== 2000 ||
+      sepAfterOver.previousCarryForward !== 0 ||
+      sepNifty?.plannedAmount !== 800
+    ) {
       console.error('❌ Over-investment should not reduce next month target!', sepAfterOver);
       process.exit(1);
     }
-    console.log('✅ Over-Investment PASS: Remaining=0, next target remains base amount (2000).');
+    console.log('✅ Over-Investment PASS: Remaining=0, all targets remain base amount (Total: 2000).');
 
     // Restore August back to canonical (500/500/500/0)
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 8, 500);
+    await monthlyInvestmentService.upsertActualAmount(next50.id, 2026, 8, 500);
+    await monthlyInvestmentService.upsertActualAmount(midcap.id, 2026, 8, 500);
+    await monthlyInvestmentService.upsertActualAmount(smallcap.id, 2026, 8, 0);
     console.log('✅ Restored August to canonical state.\n');
 
     // Step 11: Invalid Input Validations
@@ -291,7 +324,7 @@ async function runE2EAcceptanceSuite() {
   }
 
   console.log('\n================================================================');
-  console.log('🎉 ALL PHASE E FULL END-TO-END ACCEPTANCE TESTS PASSED (CLEAN)!');
+  console.log('🎉 ALL FULL END-TO-END ACCEPTANCE TESTS PASSED (CLEAN)!');
   console.log('================================================================');
 }
 

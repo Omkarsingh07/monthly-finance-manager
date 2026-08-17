@@ -14,6 +14,8 @@ export interface MonthlyInvestmentItem {
   name: string;
   category: InvestmentCategory;
   weightage: number;
+  normalPlannedAmount?: number;
+  previousMonthPending?: number;
   plannedAmount: number;
   actualAmount: number;
 }

@@ -25,7 +25,26 @@ function getApiBaseUrl(): string {
 
 export const apiClient = axios.create({
   baseURL: getApiBaseUrl(),
+  withCredentials: true, // Send HTTP-only session cookies with every request
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Response interceptor to handle unauthorized (401) responses
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const isAuthEndpoint =
+        error.config?.url?.includes('/auth/login') ||
+        error.config?.url?.includes('/auth/me');
+
+      // If unauthorized on protected route and not already on /login, redirect
+      if (!isAuthEndpoint && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
