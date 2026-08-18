@@ -34,8 +34,35 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchDashboard(selectedMonth, selectedYear);
-  }, [selectedMonth, selectedYear, fetchDashboard]);
+    let isCancelled = false;
+
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getDashboard(selectedMonth, selectedYear);
+        if (!isCancelled) {
+          setData(response);
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          console.error('[Dashboard] Failed to fetch dashboard:', err);
+          setError(getErrorMessage(err, 'Unable to load your financial data from server.'));
+          setData(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedMonth, selectedYear]);
 
   const handleMonthYearChange = (newMonth: number, newYear: number) => {
     setSelectedMonth(newMonth);

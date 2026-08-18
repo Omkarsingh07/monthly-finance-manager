@@ -10,10 +10,24 @@ export interface GoogleSheetsConfig {
   privateKey: string;
 }
 
+import https from 'https';
+
+// Persistent HTTPS agent with keep-alive to avoid TLS/TCP handshake overhead on every API call
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 30,
+  keepAliveMsecs: 60000,
+});
+
+let cachedConfig: GoogleSheetsConfig | null = null;
 let sheetsInstance: sheets_v4.Sheets | null = null;
 let authClient: any = null;
 
 export function getGoogleSheetsConfig(): GoogleSheetsConfig {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
@@ -45,11 +59,13 @@ export function getGoogleSheetsConfig(): GoogleSheetsConfig {
     }
   }
 
-  return {
+  cachedConfig = {
     spreadsheetId,
     clientEmail,
     privateKey,
   };
+
+  return cachedConfig;
 }
 
 export function getSheetsClient(): { sheets: sheets_v4.Sheets; spreadsheetId: string } {
@@ -60,6 +76,11 @@ export function getSheetsClient(): { sheets: sheets_v4.Sheets; spreadsheetId: st
       email: config.clientEmail,
       key: config.privateKey,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+
+    // Set global options for googleapis to reuse HTTP keep-alive connection pool
+    google.options({
+      agent: httpsAgent,
     });
 
     sheetsInstance = google.sheets({

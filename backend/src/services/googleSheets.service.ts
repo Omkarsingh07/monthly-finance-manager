@@ -160,34 +160,67 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Reads all data rows (excluding row 1 header) from a given tab with short TTL cache.
-   * Returns an array of raw string arrays along with their 1-based rowIndex.
+   * Batch reads data rows (excluding row 1 header) from multiple tabs in a SINGLE Google Sheets API call.
+   * Caches results with short TTL and logs latency.
    */
-  async readRawRows(tabName: string, forceFresh: boolean = false): Promise<Array<{ rowIndex: number; values: string[] }>> {
+  async batchReadRawRows(
+    tabNames: string[],
+    forceFresh: boolean = false
+  ): Promise<Map<string, Array<{ rowIndex: number; values: string[] }>>> {
     const now = Date.now();
-    const cached = this.cache.get(tabName);
+    const result = new Map<string, Array<{ rowIndex: number; values: string[] }>>();
+    const missingTabs: string[] = [];
 
-    if (!forceFresh && cached && now - cached.timestamp < this.CACHE_TTL_MS) {
-      return cached.data;
+    for (const tab of tabNames) {
+      const cached = this.cache.get(tab);
+      if (!forceFresh && cached && now - cached.timestamp < this.CACHE_TTL_MS) {
+        result.set(tab, cached.data);
+      } else {
+        missingTabs.push(tab);
+      }
     }
 
+    if (missingTabs.length === 0) {
+      return result;
+    }
+
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
 
-    const response = await sheets.spreadsheets.values.get({
+    const response = await sheets.spreadsheets.values.batchGet({
       spreadsheetId,
-      range: `${tabName}!A2:Z`,
+      ranges: missingTabs.map((t) => `${t}!A2:Z`),
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
 
-    const rows = response.data.values || [];
-    const parsed = rows.map((row, idx) => ({
-      rowIndex: idx + 2, // Row 1 is header, data starts at row 2
-      values: row.map((v) => (v === null || v === undefined ? '' : String(v))),
-    }));
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-batch-read: ${elapsed}ms (tabs: ${missingTabs.join(', ')})`);
 
-    this.cache.set(tabName, { timestamp: now, data: parsed });
-    return parsed;
+    const valueRanges = response.data.valueRanges || [];
+
+    missingTabs.forEach((tab, index) => {
+      const vr = valueRanges[index];
+      const rows = vr?.values || [];
+      const parsed = rows.map((row, idx) => ({
+        rowIndex: idx + 2, // Row 1 is header, data starts at row 2
+        values: row.map((v) => (v === null || v === undefined ? '' : String(v))),
+      }));
+
+      this.cache.set(tab, { timestamp: now, data: parsed });
+      result.set(tab, parsed);
+    });
+
+    return result;
+  }
+
+  /**
+   * Reads all data rows (excluding row 1 header) from a given tab with short TTL cache.
+   * Returns an array of raw string arrays along with their 1-based rowIndex.
+   */
+  async readRawRows(tabName: string, forceFresh: boolean = false): Promise<Array<{ rowIndex: number; values: string[] }>> {
+    const batchResult = await this.batchReadRawRows([tabName], forceFresh);
+    return batchResult.get(tabName) || [];
   }
 
   /**
@@ -195,6 +228,7 @@ export class GoogleSheetsService {
    */
   async appendRow(tabName: string, rowValues: any[]): Promise<void> {
     this.invalidateCache(tabName);
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
 
     await sheets.spreadsheets.values.append({
@@ -206,6 +240,9 @@ export class GoogleSheetsService {
         values: [rowValues],
       },
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-append-row: ${elapsed}ms (tab: ${tabName})`);
   }
 
   /**
@@ -214,6 +251,7 @@ export class GoogleSheetsService {
   async appendRows(tabName: string, rowsValues: any[][]): Promise<void> {
     if (rowsValues.length === 0) return;
     this.invalidateCache(tabName);
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
 
     await sheets.spreadsheets.values.append({
@@ -225,6 +263,9 @@ export class GoogleSheetsService {
         values: rowsValues,
       },
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-append-rows: ${elapsed}ms (tab: ${tabName}, count: ${rowsValues.length})`);
   }
 
   /**
@@ -232,6 +273,7 @@ export class GoogleSheetsService {
    */
   async updateRow(tabName: string, rowIndex: number, rowValues: any[]): Promise<void> {
     this.invalidateCache(tabName);
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
     const endColChar = String.fromCharCode(64 + Math.max(rowValues.length, 1));
 
@@ -243,6 +285,41 @@ export class GoogleSheetsService {
         values: [rowValues],
       },
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-update-row: ${elapsed}ms (tab: ${tabName}, rowIndex: ${rowIndex})`);
+  }
+
+  /**
+   * Batch updates multiple rows in a tab in a single Google Sheets API call.
+   */
+  async batchUpdateRows(
+    tabName: string,
+    updates: Array<{ rowIndex: number; rowValues: any[] }>
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    this.invalidateCache(tabName);
+    const startTime = Date.now();
+    const { sheets, spreadsheetId } = getSheetsClient();
+
+    const data = updates.map((u) => {
+      const endColChar = String.fromCharCode(64 + Math.max(u.rowValues.length, 1));
+      return {
+        range: `${tabName}!A${u.rowIndex}:${endColChar}${u.rowIndex}`,
+        values: [u.rowValues],
+      };
+    });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data,
+      },
+    });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-batch-update: ${elapsed}ms (tab: ${tabName}, count: ${updates.length})`);
   }
 
   /**
@@ -250,12 +327,16 @@ export class GoogleSheetsService {
    */
   async clearDataRows(tabName: string): Promise<void> {
     this.invalidateCache(tabName);
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
 
     await sheets.spreadsheets.values.clear({
       spreadsheetId,
       range: `${tabName}!A2:Z`,
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-clear: ${elapsed}ms (tab: ${tabName})`);
   }
 
   /**
@@ -263,6 +344,7 @@ export class GoogleSheetsService {
    */
   async deleteRow(tabName: string, rowIndex: number): Promise<void> {
     this.invalidateCache(tabName);
+    const startTime = Date.now();
     const { sheets, spreadsheetId } = getSheetsClient();
     const sheetId = await this.getTabSheetId(tabName);
 
@@ -283,6 +365,9 @@ export class GoogleSheetsService {
         ],
       },
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[PERF] google-sheets-delete-row: ${elapsed}ms (tab: ${tabName}, rowIndex: ${rowIndex})`);
   }
 }
 

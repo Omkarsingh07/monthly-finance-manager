@@ -257,11 +257,51 @@ export class MonthlyInvestmentService {
     year: number,
     priceMap?: Map<string, number>
   ): Promise<MonthlyBreakdownResponse> {
-    const [allMonthly, histories, allPlanItems] = await Promise.all([
-      this.getAllMonthlyInvestments(),
-      investmentPlanService.getPlanHistories(),
-      investmentPlanService.getAllPlanItems(),
+    const batchMap = await googleSheetsService.batchReadRawRows([
+      SHEET_TABS.MONTHLY_INVESTMENTS,
+      SHEET_TABS.PLAN_HISTORY,
+      SHEET_TABS.INVESTMENT_PLAN,
     ]);
+
+    const monthlyRows = batchMap.get(SHEET_TABS.MONTHLY_INVESTMENTS) || [];
+    const historyRows = batchMap.get(SHEET_TABS.PLAN_HISTORY) || [];
+    const planRows = batchMap.get(SHEET_TABS.INVESTMENT_PLAN) || [];
+
+    const allMonthly = monthlyRows.map((r) => ({
+      rowIndex: r.rowIndex,
+      record: {
+        id: r.values[0] || '',
+        planInvestmentId: r.values[1] || '',
+        year: parseInt(r.values[2] || '2000', 10),
+        month: parseInt(r.values[3] || '1', 10),
+        actualAmount: parseFloat(r.values[4] || '0'),
+        createdAt: r.values[5] || '',
+        updatedAt: r.values[6] || '',
+      },
+    }));
+
+    const histories: PlanHistoryRecord[] = historyRows.map((r) => ({
+      planVersion: parseInt(r.values[0] || '1', 10),
+      monthlyInvestmentAmount: parseFloat(r.values[1] || '0'),
+      effectiveFromMonth: parseInt(r.values[2] || '1', 10),
+      effectiveFromYear: parseInt(r.values[3] || '2000', 10),
+      createdAt: r.values[4] || '',
+    }));
+
+    const allPlanItems = planRows.map((r) => ({
+      rowIndex: r.rowIndex,
+      record: {
+        id: r.values[0] || '',
+        name: r.values[1] || '',
+        category: (r.values[2] || 'OTHER') as any,
+        weightage: parseFloat(r.values[3] || '0'),
+        effectiveFromMonth: parseInt(r.values[4] || '1', 10),
+        effectiveFromYear: parseInt(r.values[5] || '2000', 10),
+        planVersion: parseInt(r.values[6] || '1', 10),
+        createdAt: r.values[7] || '',
+        updatedAt: r.values[8] || '',
+      },
+    }));
 
     const activePlan = this.resolveActivePlanInMemory(month, year, histories, allPlanItems);
 
@@ -353,6 +393,43 @@ export class MonthlyInvestmentService {
   }
 
   /**
+   * Retrieves complete dashboard payload (breakdown + total investment)
+   * in a SINGLE Google Sheets batch read round-trip.
+   */
+  async getDashboardData(month: number, year: number): Promise<{
+    breakdown: MonthlyBreakdownResponse;
+    totalInvestment: number;
+  }> {
+    const batchMap = await googleSheetsService.batchReadRawRows([
+      SHEET_TABS.MONTHLY_INVESTMENTS,
+      SHEET_TABS.PLAN_HISTORY,
+      SHEET_TABS.INVESTMENT_PLAN,
+    ]);
+
+    const monthlyRows = batchMap.get(SHEET_TABS.MONTHLY_INVESTMENTS) || [];
+    const allMonthly = monthlyRows.map((r) => ({
+      rowIndex: r.rowIndex,
+      record: {
+        id: r.values[0] || '',
+        planInvestmentId: r.values[1] || '',
+        year: parseInt(r.values[2] || '2000', 10),
+        month: parseInt(r.values[3] || '1', 10),
+        actualAmount: parseFloat(r.values[4] || '0'),
+        createdAt: r.values[5] || '',
+        updatedAt: r.values[6] || '',
+      },
+    }));
+
+    const totalInvestment = sumMoney(allMonthly.map((m) => m.record.actualAmount));
+    const breakdown = await this.getMonthlyBreakdown(month, year);
+
+    return {
+      breakdown,
+      totalInvestment,
+    };
+  }
+
+  /**
    * Upserts a single monthly actual investment amount in Google Sheets.
    * Guarantees uniqueness for (planInvestmentId, year, month).
    */
@@ -420,16 +497,61 @@ export class MonthlyInvestmentService {
   }
 
   /**
-   * Batch upserts actual investments for a month/year.
+   * Batch upserts actual investments for a month/year in minimal Google Sheets API calls.
    */
   async batchUpsertActualAmounts(
     year: number,
     month: number,
     items: Array<{ planInvestmentId: string; actualAmount: number }>
   ): Promise<MonthlyBreakdownResponse> {
+    const allMonthly = await this.getAllMonthlyInvestments();
+    const now = new Date().toISOString();
+    const updatesToMake: Array<{ rowIndex: number; rowValues: any[] }> = [];
+    const rowsToAppend: any[][] = [];
+
     for (const item of items) {
-      await this.upsertActualAmount(item.planInvestmentId, year, month, item.actualAmount);
+      const roundedAmount = roundMoney(item.actualAmount);
+      const existing = allMonthly.find(
+        (m) =>
+          m.record.planInvestmentId === item.planInvestmentId &&
+          m.record.year === year &&
+          m.record.month === month
+      );
+
+      if (existing) {
+        updatesToMake.push({
+          rowIndex: existing.rowIndex,
+          rowValues: [
+            existing.record.id,
+            existing.record.planInvestmentId,
+            year,
+            month,
+            roundedAmount,
+            existing.record.createdAt,
+            now,
+          ],
+        });
+      } else {
+        const newId = `mi_${uuidv4().substring(0, 8)}`;
+        rowsToAppend.push([
+          newId,
+          item.planInvestmentId,
+          year,
+          month,
+          roundedAmount,
+          now,
+          now,
+        ]);
+      }
     }
+
+    if (updatesToMake.length > 0) {
+      await googleSheetsService.batchUpdateRows(SHEET_TABS.MONTHLY_INVESTMENTS, updatesToMake);
+    }
+    if (rowsToAppend.length > 0) {
+      await googleSheetsService.appendRows(SHEET_TABS.MONTHLY_INVESTMENTS, rowsToAppend);
+    }
+
     return this.getMonthlyBreakdown(month, year);
   }
 

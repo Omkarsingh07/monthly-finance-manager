@@ -78,8 +78,38 @@ export class InvestmentPlanService {
     effectiveFromYear: number;
     investments: InvestmentPlanRecord[];
   } | null> {
-    const histories = await this.getPlanHistories();
-    const allPlanItemsWithRows = await this.getAllPlanItems();
+    const batchMap = await googleSheetsService.batchReadRawRows([
+      SHEET_TABS.PLAN_HISTORY,
+      SHEET_TABS.INVESTMENT_PLAN,
+      SHEET_TABS.SETTINGS,
+    ]);
+
+    const rawHistories = batchMap.get(SHEET_TABS.PLAN_HISTORY) || [];
+    const rawPlanItems = batchMap.get(SHEET_TABS.INVESTMENT_PLAN) || [];
+    const rawSettings = batchMap.get(SHEET_TABS.SETTINGS) || [];
+
+    const histories: PlanHistoryRecord[] = rawHistories.map((r) => ({
+      planVersion: parseInt(r.values[0] || '1', 10),
+      monthlyInvestmentAmount: parseFloat(r.values[1] || '0'),
+      effectiveFromMonth: parseInt(r.values[2] || '1', 10),
+      effectiveFromYear: parseInt(r.values[3] || '2000', 10),
+      createdAt: r.values[4] || '',
+    }));
+
+    const allPlanItemsWithRows = rawPlanItems.map((r) => ({
+      rowIndex: r.rowIndex,
+      record: {
+        id: r.values[0] || '',
+        name: r.values[1] || '',
+        category: (r.values[2] || 'OTHER') as InvestmentCategory,
+        weightage: parseFloat(r.values[3] || '0'),
+        effectiveFromMonth: parseInt(r.values[4] || '1', 10),
+        effectiveFromYear: parseInt(r.values[5] || '2000', 10),
+        planVersion: parseInt(r.values[6] || '1', 10),
+        createdAt: r.values[7] || '',
+        updatedAt: r.values[8] || '',
+      },
+    }));
 
     if (allPlanItemsWithRows.length === 0 && histories.length === 0) {
       return null;
@@ -118,9 +148,9 @@ export class InvestmentPlanService {
 
     // If no history row existed, try reading monthlyAmount from Settings
     if (!activeHistory) {
-      const settingVal = await this.getSetting('monthlyInvestmentAmount');
-      if (settingVal) {
-        monthlyAmount = parseFloat(settingVal);
+      const settingRow = rawSettings.find((r) => r.values[0] === 'monthlyInvestmentAmount');
+      if (settingRow && settingRow.values[1] !== undefined) {
+        monthlyAmount = parseFloat(settingRow.values[1]);
       }
     }
 

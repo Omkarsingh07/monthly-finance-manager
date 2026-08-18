@@ -9,6 +9,7 @@ import {
 import { z } from 'zod';
 
 export async function getMonthlyInvestments(req: Request, res: Response): Promise<void> {
+  const startTime = Date.now();
   try {
     const now = new Date();
     const defaultMonth = now.getMonth() + 1;
@@ -19,6 +20,7 @@ export async function getMonthlyInvestments(req: Request, res: Response): Promis
 
     const queryValidation = MonthlyQuerySchema.safeParse({ month, year });
     if (!queryValidation.success) {
+      console.log(`[PERF] monthly-investments: ${Date.now() - startTime}ms (validation error)`);
       res.status(400).json({
         error: 'Invalid query parameters',
         details: queryValidation.error.issues.map((i: z.ZodIssue) => i.message),
@@ -27,8 +29,10 @@ export async function getMonthlyInvestments(req: Request, res: Response): Promis
     }
 
     const breakdown = await monthlyInvestmentService.getMonthlyBreakdown(month, year);
+    console.log(`[PERF] monthly-investments: ${Date.now() - startTime}ms (month: ${month}, year: ${year})`);
     res.status(200).json(breakdown);
   } catch (error: any) {
+    console.log(`[PERF] monthly-investments: ${Date.now() - startTime}ms (error)`);
     console.error('[monthlyInvestment] Error in getMonthlyInvestments:', error);
     res.status(500).json({
       error: 'Failed to retrieve monthly investments',
@@ -38,6 +42,7 @@ export async function getMonthlyInvestments(req: Request, res: Response): Promis
 }
 
 export async function updateMonthlyInvestment(req: Request, res: Response): Promise<void> {
+  const startTime = Date.now();
   try {
     const planInvestmentIdParam = req.params.planInvestmentId;
     const planInvestmentId = Array.isArray(planInvestmentIdParam)
@@ -72,6 +77,7 @@ export async function updateMonthlyInvestment(req: Request, res: Response): Prom
     // Return the updated monthly breakdown
     const updatedBreakdown = await monthlyInvestmentService.getMonthlyBreakdown(month, year);
 
+    console.log(`[PERF] monthly-investments/update: ${Date.now() - startTime}ms`);
     res.status(200).json({
       success: true,
       message: 'Monthly investment updated successfully',
@@ -79,6 +85,7 @@ export async function updateMonthlyInvestment(req: Request, res: Response): Prom
       breakdown: updatedBreakdown,
     });
   } catch (error: any) {
+    console.log(`[PERF] monthly-investments/update: ${Date.now() - startTime}ms (error)`);
     console.error('[monthlyInvestment] Error in updateMonthlyInvestment:', error);
     res.status(500).json({
       error: 'Failed to update monthly investment',
@@ -88,6 +95,7 @@ export async function updateMonthlyInvestment(req: Request, res: Response): Prom
 }
 
 export async function batchUpdateMonthlyInvestments(req: Request, res: Response): Promise<void> {
+  const startTime = Date.now();
   try {
     const validation = BatchUpdateMonthlyInvestmentsSchema.safeParse(req.body);
     if (!validation.success) {
@@ -108,12 +116,14 @@ export async function batchUpdateMonthlyInvestments(req: Request, res: Response)
       investments
     );
 
+    console.log(`[PERF] monthly-investments/batch-update: ${Date.now() - startTime}ms (count: ${investments.length})`);
     res.status(200).json({
       success: true,
       message: 'Monthly investments updated successfully',
       breakdown: updatedBreakdown,
     });
   } catch (error: any) {
+    console.log(`[PERF] monthly-investments/batch-update: ${Date.now() - startTime}ms (error)`);
     console.error('[monthlyInvestment] Error in batchUpdateMonthlyInvestments:', error);
     res.status(500).json({
       error: 'Failed to update monthly investments',

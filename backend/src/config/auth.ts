@@ -10,19 +10,36 @@ function cleanEnv(val: string | undefined): string {
   return val.trim().replace(/^["']|["']$/g, '');
 }
 
+let cachedEmail: string | null = null;
+let cachedPassword: string | null = null;
+let cachedSessionSecret: string | null = null;
+let cachedFrontendUrl: string | null = null;
+
 export const AUTH_CONFIG = {
   get EMAIL(): string {
-    return cleanEnv(process.env.AUTH_EMAIL).toLowerCase();
+    if (cachedEmail === null) {
+      cachedEmail = cleanEnv(process.env.AUTH_EMAIL).toLowerCase();
+    }
+    return cachedEmail;
   },
   get PASSWORD(): string {
-    return cleanEnv(process.env.AUTH_PASSWORD);
+    if (cachedPassword === null) {
+      cachedPassword = cleanEnv(process.env.AUTH_PASSWORD);
+    }
+    return cachedPassword;
   },
   get SESSION_SECRET(): string {
-    return cleanEnv(process.env.SESSION_SECRET) || 'fallback_dev_session_secret_local_only';
+    if (cachedSessionSecret === null) {
+      cachedSessionSecret = cleanEnv(process.env.SESSION_SECRET) || 'fallback_dev_session_secret_local_only';
+    }
+    return cachedSessionSecret;
   },
   get FRONTEND_URL(): string {
-    const raw = cleanEnv(process.env.FRONTEND_URL);
-    return raw ? raw.replace(/\/+$/, '') : '';
+    if (cachedFrontendUrl === null) {
+      const raw = cleanEnv(process.env.FRONTEND_URL);
+      cachedFrontendUrl = raw ? raw.replace(/\/+$/, '') : '';
+    }
+    return cachedFrontendUrl;
   },
   COOKIE_NAME: 'fm_session',
   COOKIE_MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 days in ms

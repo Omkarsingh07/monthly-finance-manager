@@ -17,19 +17,33 @@ export interface GenericAuthResponse {
   error?: string;
 }
 
+let checkAuthPromise: Promise<AuthStatusResponse> | null = null;
+
 export const authApi = {
   login: async (payload: LoginPayload): Promise<GenericAuthResponse> => {
+    checkAuthPromise = null; // Reset cached check promise on login
     const { data } = await apiClient.post<GenericAuthResponse>('/auth/login', payload);
     return data;
   },
 
   logout: async (): Promise<GenericAuthResponse> => {
+    checkAuthPromise = null;
     const { data } = await apiClient.post<GenericAuthResponse>('/auth/logout');
     return data;
   },
 
   checkAuth: async (): Promise<AuthStatusResponse> => {
-    const { data } = await apiClient.get<AuthStatusResponse>('/auth/me');
-    return data;
+    if (!checkAuthPromise) {
+      checkAuthPromise = apiClient
+        .get<AuthStatusResponse>('/auth/me')
+        .then((res) => res.data)
+        .finally(() => {
+          // Clear in-flight promise after small window so future explicit checks get fresh data
+          setTimeout(() => {
+            checkAuthPromise = null;
+          }, 500);
+        });
+    }
+    return checkAuthPromise;
   },
 };

@@ -8,13 +8,11 @@ export interface DashboardResponse extends MonthlyBreakdownResponse {
 export class DashboardService {
   /**
    * Generates the complete dashboard payload for a given (month, year)
-   * by combining the monthly breakdown and total historical actual investment.
+   * by combining the monthly breakdown and total historical actual investment
+   * in a single batch read.
    */
   async getDashboard(month: number, year: number): Promise<DashboardResponse> {
-    const [breakdown, totalInvestment] = await Promise.all([
-      monthlyInvestmentService.getMonthlyBreakdown(month, year),
-      monthlyInvestmentService.getTotalActualInvestment(),
-    ]);
+    const { breakdown, totalInvestment } = await monthlyInvestmentService.getDashboardData(month, year);
 
     return {
       ...breakdown,

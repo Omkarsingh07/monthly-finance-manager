@@ -71,8 +71,50 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    fetchPlan();
-  }, [fetchPlan]);
+    let isCancelled = false;
+
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getInvestmentPlan();
+        if (!isCancelled) {
+          if (!response.noPlan && response.investments && response.investments.length > 0) {
+            setMonthlyAmount(response.monthlyAmount ?? 0);
+            setEffectiveMonth(response.effectiveFromMonth ?? now.getMonth() + 1);
+            setEffectiveYear(response.effectiveFromYear ?? now.getFullYear());
+            setItems(
+              response.investments.map((i) => ({
+                id: i.id,
+                name: i.name,
+                category: i.category,
+                weightage: i.weightage,
+              }))
+            );
+          } else {
+            // Fresh user default
+            setMonthlyAmount(0);
+            setItems([{ name: '', category: 'ETF', weightage: 0 }]);
+          }
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          console.error('[Settings] Failed to fetch investment plan:', err);
+          setError(getErrorMessage(err, 'Unable to load settings from server.'));
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const handleAddItem = () => {
     setItems((prev) => [...prev, { name: '', category: 'ETF', weightage: 0 }]);

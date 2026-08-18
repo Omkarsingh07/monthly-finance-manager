@@ -24,36 +24,31 @@ app.use(cookieParser());
 // Body parser
 app.use(express.json());
 
+const ALLOWED_ORIGINS_SET = new Set([
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  'https://monthly-finance-manager-ten.vercel.app',
+]);
+
 /**
- * Checks if a given request origin is allowed.
+ * Checks if a given request origin is allowed with fast O(1) set lookup.
  */
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true; // Allow requests with no origin (curl, server-to-server, health checks)
 
   const clean = origin.trim().replace(/\/+$/, '');
 
-  // 1. Localhost development
-  if (
-    clean === 'http://localhost:5173' ||
-    clean === 'http://localhost:3000' ||
-    clean === 'http://127.0.0.1:5173' ||
-    clean === 'http://127.0.0.1:3000'
-  ) {
+  if (ALLOWED_ORIGINS_SET.has(clean)) {
     return true;
   }
 
-  // 2. Production Vercel domain
-  if (clean === 'https://monthly-finance-manager-ten.vercel.app') {
-    return true;
-  }
-
-  // 3. Configured FRONTEND_URL from environment variable
   const configuredFrontend = AUTH_CONFIG.FRONTEND_URL;
   if (configuredFrontend && clean === configuredFrontend) {
     return true;
   }
 
-  // 4. Non-production fallback
   if (process.env.NODE_ENV !== 'production') {
     return true;
   }

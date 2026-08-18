@@ -45,8 +45,43 @@ export default function Investments() {
   }, []);
 
   useEffect(() => {
-    fetchInvestments(selectedMonth, selectedYear);
-  }, [selectedMonth, selectedYear, fetchInvestments]);
+    let isCancelled = false;
+
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      setSaveStatus('idle');
+      try {
+        const response = await getMonthlyInvestments(selectedMonth, selectedYear);
+        if (!isCancelled) {
+          setData(response);
+
+          const initialInputs: Record<string, number> = {};
+          response.investments?.forEach((item) => {
+            initialInputs[item.id] = item.actualAmount ?? 0;
+          });
+          setActualInputs(initialInputs);
+          setInputErrors({});
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          console.error('[Investments] Failed to fetch monthly investments:', err);
+          setError(getErrorMessage(err, 'Unable to load investments from server.'));
+          setData(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedMonth, selectedYear]);
 
   const handleInputChange = (id: string, value: string) => {
     setSaveStatus('idle');

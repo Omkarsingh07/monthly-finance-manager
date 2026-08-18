@@ -5,6 +5,7 @@ import { MonthlyQuerySchema } from '../validators/monthlyInvestment.validator';
 import { z } from 'zod';
 
 export async function getDashboard(req: Request, res: Response): Promise<void> {
+  const startTime = Date.now();
   try {
     const now = new Date();
     const defaultMonth = now.getMonth() + 1;
@@ -15,6 +16,7 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
 
     const validation = MonthlyQuerySchema.safeParse({ month, year });
     if (!validation.success) {
+      console.log(`[PERF] dashboard: ${Date.now() - startTime}ms (validation error)`);
       res.status(400).json({
         error: 'Invalid month or year query parameter',
         details: validation.error.issues.map((i: z.ZodIssue) => i.message),
@@ -23,8 +25,10 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
     }
 
     const dashboard = await dashboardService.getDashboard(month, year);
+    console.log(`[PERF] dashboard: ${Date.now() - startTime}ms (month: ${month}, year: ${year})`);
     res.status(200).json(dashboard);
   } catch (error: any) {
+    console.log(`[PERF] dashboard: ${Date.now() - startTime}ms (error)`);
     console.error('[dashboard] Error in getDashboard:', error);
     res.status(500).json({
       error: 'Failed to retrieve dashboard data',
