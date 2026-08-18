@@ -19,7 +19,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   previousCarryForward,
   currentMonthActual,
 }) => {
-  const isCompleted = currentMonthRemaining === 0 && currentMonthActual >= currentMonthTarget && currentMonthTarget > 0;
+  const isCompleted = currentMonthRemaining === 0 && currentMonthActual > 0;
   const isOverTarget = currentMonthActual > currentMonthTarget;
 
   return (
@@ -38,7 +38,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         </p>
 
         <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          All-time actual invested across all history
+          All-time actual purchases across all history
         </p>
       </div>
 
@@ -52,11 +52,13 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         </div>
 
         <p className="mt-3 text-3xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
-          {formatINR(currentMonthTarget)}
+          {formatINR(baseMonthlyAmount || currentMonthTarget)}
         </p>
 
         <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          {formatINR(baseMonthlyAmount)} base {previousCarryForward > 0 ? `+ ${formatINR(previousCarryForward)} carry forward` : '+ ₹0.00 carry forward'}
+          {previousCarryForward > 0
+            ? `Monthly SIP (+ ${formatINR(previousCarryForward)} accumulated pending)`
+            : 'Fixed monthly SIP allocation'}
         </p>
       </div>
 

@@ -7,7 +7,7 @@ import { googleSheetsService, SHEET_TABS } from '../services/googleSheets.servic
 
 async function runDashboardTests() {
   console.log('====================================================');
-  console.log('  DASHBOARD INTEGRATION TEST SUITE (PER-INVESTMENT)');
+  console.log('  DASHBOARD INTEGRATION TEST SUITE (STOCK-WISE SIP)');
   console.log('====================================================\n');
 
   try {
@@ -65,10 +65,10 @@ async function runDashboardTests() {
     console.log('✅ July Initial Dashboard PASS.\n');
 
     // Step 4: Enter July 2026 Actual Investments:
-    // Nifty: planned 800, actual 500 -> pending 300
-    // Next50: planned 500, actual 500 -> pending 0
-    // Midcap: planned 400, actual 400 -> pending 0
-    // Smallcap: planned 300, actual 100 -> pending 200
+    // Nifty: allocation 800, actual 500 -> pending 300
+    // Next50: allocation 500, actual 500 -> pending 0
+    // Midcap: allocation 400, actual 400 -> pending 0
+    // Smallcap: allocation 300, actual 100 -> pending 200
     // Total actual = 1500, total pending = 500
     console.log('4. Entering July 2026 actual investments (500 + 500 + 400 + 100 = 1500)...');
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 7, 500);
@@ -78,7 +78,7 @@ async function runDashboardTests() {
 
     const julyAfter = await dashboardService.getDashboard(7, 2026);
     console.log(`   July Total Investment: ${julyAfter.totalInvestment} (Expected: 1500)`);
-    console.log(`   July This Month Investment: ${julyAfter.currentMonthTarget} (Expected: 2000)`);
+    console.log(`   July This Month Target: ${julyAfter.currentMonthTarget} (Expected: 2000)`);
     console.log(`   July This Month Remaining: ${julyAfter.currentMonthRemaining} (Expected: 500)`);
 
     if (
@@ -91,17 +91,18 @@ async function runDashboardTests() {
     }
     console.log('✅ July Dashboard PASS: Total=1500, Target=2000, Remaining=500.\n');
 
-    // Step 5: August 2026 Dashboard with PER-INVESTMENT Carry Forward
-    // Nifty: 800 normal + 300 pending = 1100 target
-    // Next50: 500 normal + 0 pending = 500 target
-    // Midcap: 400 normal + 0 pending = 400 target
-    // Smallcap: 300 normal + 200 pending = 500 target
-    // Total Target = 1100 + 500 + 400 + 500 = 2500
-    console.log('5. Checking August 2026 Dashboard with Per-Investment Carry Forward...');
+    // Step 5: August 2026 Dashboard with STOCK-WISE Pending Balances
+    // Nifty: 800 allocation + 300 pending = 1100 available
+    // Next50: 500 allocation + 0 pending = 500 available
+    // Midcap: 400 allocation + 0 pending = 400 available
+    // Smallcap: 300 allocation + 200 pending = 500 available
+    // Total Available = 1100 + 500 + 400 + 500 = 2500
+    // Target SIP commitment = 2000
+    console.log('5. Checking August 2026 Dashboard with Stock-Wise Pending Accumulation...');
     const augustInitial = await dashboardService.getDashboard(8, 2026);
-    console.log(`   August Base: ${augustInitial.baseMonthlyAmount} (Expected: 2000)`);
-    console.log(`   August Carry Forward: ${augustInitial.previousCarryForward} (Expected: 500)`);
-    console.log(`   August This Month Investment Target: ${augustInitial.currentMonthTarget} (Expected: 2500)`);
+    console.log(`   August Base Monthly SIP: ₹${augustInitial.baseMonthlyAmount} (Expected: 2000)`);
+    console.log(`   August Carry Forward: ₹${augustInitial.previousCarryForward} (Expected: 500)`);
+    console.log(`   August Total Available: ₹${augustInitial.totalAvailableAmount} (Expected: 2500)`);
 
     const pNifty = augustInitial.investments.find((i) => i.id === nifty.id);
     const pNext50 = augustInitial.investments.find((i) => i.id === next50.id);
@@ -109,27 +110,28 @@ async function runDashboardTests() {
     const pSmallcap = augustInitial.investments.find((i) => i.id === smallcap.id);
 
     console.log(`   Investment-level Targets:`);
-    console.log(`   - Nifty 50:  Normal=₹${pNifty?.normalPlannedAmount}, Pending=₹${pNifty?.previousMonthPending}, Target=₹${pNifty?.plannedAmount} (Exp: 1100)`);
-    console.log(`   - Next 50:   Normal=₹${pNext50?.normalPlannedAmount}, Pending=₹${pNext50?.previousMonthPending}, Target=₹${pNext50?.plannedAmount} (Exp: 500)`);
-    console.log(`   - Midcap:    Normal=₹${pMidcap?.normalPlannedAmount}, Pending=₹${pMidcap?.previousMonthPending}, Target=₹${pMidcap?.plannedAmount} (Exp: 400)`);
-    console.log(`   - Smallcap:  Normal=₹${pSmallcap?.normalPlannedAmount}, Pending=₹${pSmallcap?.previousMonthPending}, Target=₹${pSmallcap?.plannedAmount} (Exp: 500)`);
+    console.log(`   - Nifty 50:  Alloc=₹${pNifty?.monthlyAllocation}, PrevPending=₹${pNifty?.previousPending}, Available=₹${pNifty?.availableAmount} (Exp: 1100)`);
+    console.log(`   - Next 50:   Alloc=₹${pNext50?.monthlyAllocation}, PrevPending=₹${pNext50?.previousPending}, Available=₹${pNext50?.availableAmount} (Exp: 500)`);
+    console.log(`   - Midcap:    Alloc=₹${pMidcap?.monthlyAllocation}, PrevPending=₹${pMidcap?.previousPending}, Available=₹${pMidcap?.availableAmount} (Exp: 400)`);
+    console.log(`   - Smallcap:  Alloc=₹${pSmallcap?.monthlyAllocation}, PrevPending=₹${pSmallcap?.previousPending}, Available=₹${pSmallcap?.availableAmount} (Exp: 500)`);
 
     if (
       augustInitial.previousCarryForward !== 500 ||
-      augustInitial.currentMonthTarget !== 2500 ||
-      pNifty?.plannedAmount !== 1100 ||
-      pNifty?.previousMonthPending !== 300 ||
-      pNext50?.plannedAmount !== 500 ||
-      pNext50?.previousMonthPending !== 0 ||
-      pMidcap?.plannedAmount !== 400 ||
-      pMidcap?.previousMonthPending !== 0 ||
-      pSmallcap?.plannedAmount !== 500 ||
-      pSmallcap?.previousMonthPending !== 200
+      augustInitial.baseMonthlyAmount !== 2000 ||
+      augustInitial.totalAvailableAmount !== 2500 ||
+      pNifty?.availableAmount !== 1100 ||
+      pNifty?.previousPending !== 300 ||
+      pNext50?.availableAmount !== 500 ||
+      pNext50?.previousPending !== 0 ||
+      pMidcap?.availableAmount !== 400 ||
+      pMidcap?.previousPending !== 0 ||
+      pSmallcap?.availableAmount !== 500 ||
+      pSmallcap?.previousPending !== 200
     ) {
-      console.error('❌ August Dashboard per-investment carry forward check failed!', augustInitial);
+      console.error('❌ August Dashboard stock-wise pending check failed!', augustInitial);
       process.exit(1);
     }
-    console.log('✅ August Initial Dashboard PASS: Target=2500 with exact per-investment planned targets.\n');
+    console.log('✅ August Initial Dashboard PASS: Stock-wise allocations and available targets accurate.\n');
 
     // Step 6: Enter August 2026 Actual Investments (Total = 1500)
     console.log('6. Entering August actual investments (500 + 500 + 500 + 0 = 1500)...');
@@ -140,36 +142,31 @@ async function runDashboardTests() {
 
     const augustAfter = await dashboardService.getDashboard(8, 2026);
     console.log(`   August Total Investment: ${augustAfter.totalInvestment} (Expected: 3000 = July 1500 + August 1500)`);
-    console.log(`   August This Month Target: ${augustAfter.currentMonthTarget} (Expected: 2500)`);
-    console.log(`   August This Month Remaining: ${augustAfter.currentMonthRemaining} (Expected: 1000)`);
+    console.log(`   August This Month Remaining (Sum of Stock Pending): ${augustAfter.currentMonthRemaining} (Expected: 1100 = Nifty 600 + Smallcap 500)`);
 
     if (
       augustAfter.totalInvestment !== 3000 ||
-      augustAfter.currentMonthTarget !== 2500 ||
-      augustAfter.currentMonthRemaining !== 1000
+      augustAfter.currentMonthRemaining !== 1100
     ) {
       console.error('❌ August Dashboard after investments check failed!', augustAfter);
       process.exit(1);
     }
-    console.log('✅ August Dashboard PASS: Total=3000, This Month Target=2500, Remaining=1000.\n');
+    console.log('✅ August Dashboard PASS: Total=3000, Stock-Wise Remaining=1100.\n');
 
     // Step 7: Over-Investment Check
-    console.log('7. Testing Over-Investment scenario in August (Nifty Target 1100, Invested 1500)...');
+    console.log('7. Testing Over-Investment scenario in August (Nifty Available 1100, Invested 1500)...');
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 8, 1500);
-
-    const augustOver = await dashboardService.getDashboard(8, 2026);
-    console.log(`   August Remaining on Over-Investment: ${augustOver.currentMonthRemaining} (Expected: 0)`);
 
     const sepAfterOver = await dashboardService.getDashboard(9, 2026);
     const sepNifty = sepAfterOver.investments.find((i) => i.id === nifty.id);
-    console.log(`   September Nifty Target after August Over-Investment: ₹${sepNifty?.plannedAmount} (Expected: 800, not reduced)`);
-    console.log(`   September Nifty Pending: ₹${sepNifty?.previousMonthPending} (Expected: 0)`);
+    console.log(`   September Nifty Available after August Over-Investment: ₹${sepNifty?.availableAmount} (Expected: 800, not reduced)`);
+    console.log(`   September Nifty PrevPending: ₹${sepNifty?.previousPending} (Expected: 0)`);
 
-    if (sepNifty?.plannedAmount !== 800 || sepNifty?.previousMonthPending !== 0) {
+    if (sepNifty?.availableAmount !== 800 || sepNifty?.previousPending !== 0) {
       console.error('❌ Over-investment should not reduce next month target!', sepAfterOver);
       process.exit(1);
     }
-    console.log('✅ Over-Investment PASS: Remaining=0, next month target remains base amount (800).\n');
+    console.log('✅ Over-Investment PASS: Next month allocation remains base amount (800).\n');
 
     // Reset August nifty
     await monthlyInvestmentService.upsertActualAmount(nifty.id, 2026, 8, 500);

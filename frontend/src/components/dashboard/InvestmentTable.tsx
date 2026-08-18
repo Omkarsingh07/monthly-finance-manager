@@ -12,18 +12,20 @@ interface InvestmentTableProps {
 
 export const InvestmentTable: React.FC<InvestmentTableProps> = ({
   investments,
-  totalPlanned,
   totalActual,
   remaining,
 }) => {
+  const totalAllocation = investments.reduce((sum, i) => sum + (i.monthlyAllocation ?? i.normalPlannedAmount ?? 0), 0);
+  const totalAvailable = investments.reduce((sum, i) => sum + (i.availableAmount ?? i.plannedAmount ?? 0), 0);
+
   return (
     <div className="rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-card overflow-hidden transition-colors">
       {/* Table Header / Title */}
       <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">Investment Breakdown</h2>
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Stock-Wise SIP Allocation</h2>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Planned monthly target allocation vs actual invested amounts
+            Individual asset monthly allocations, accumulated pending balances, and actual purchases
           </p>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]">
@@ -37,36 +39,48 @@ export const InvestmentTable: React.FC<InvestmentTableProps> = ({
           <thead className="bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] text-xs font-medium border-b border-[var(--border-subtle)]">
             <tr>
               <th className="px-6 py-3.5">Investment</th>
-              <th className="px-6 py-3.5">Category</th>
-              <th className="px-6 py-3.5 text-right">Weightage</th>
-              <th className="px-6 py-3.5 text-right">Planned</th>
-              <th className="px-6 py-3.5 text-right">Actual</th>
+              <th className="px-4 py-3.5">Category</th>
+              <th className="px-4 py-3.5 text-right">Weightage</th>
+              <th className="px-4 py-3.5 text-right">Allocation</th>
+              <th className="px-4 py-3.5 text-right">Prev. Pending</th>
+              <th className="px-4 py-3.5 text-right">Available</th>
+              <th className="px-4 py-3.5 text-right">Actual</th>
               <th className="px-6 py-3.5 text-right">Remaining</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)]">
             {investments.map((item) => {
-              const itemRemaining = Math.max(0, item.plannedAmount - item.actualAmount);
-              const isItemComplete = item.actualAmount >= item.plannedAmount && item.plannedAmount > 0;
+              const allocation = item.monthlyAllocation ?? item.normalPlannedAmount ?? 0;
+              const prevPending = item.previousPending ?? item.previousMonthPending ?? 0;
+              const available = item.availableAmount ?? item.plannedAmount ?? 0;
+              const actual = item.actualAmount ?? 0;
+              const itemRemaining = item.pendingAmount ?? Math.max(0, available - actual);
+              const isItemComplete = actual >= available && available > 0;
 
               return (
                 <tr key={item.id} className="hover:bg-[var(--bg-surface-subtle)]/50 transition-colors">
                   <td className="px-6 py-4 font-semibold text-[var(--text-primary)]">
                     {item.name}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-4">
                     <span className="inline-block px-2.5 py-0.5 text-xs font-medium rounded-md bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
                       {item.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right text-[var(--text-secondary)] tabular-nums font-medium">
+                  <td className="px-4 py-4 text-right text-[var(--text-secondary)] tabular-nums font-medium">
                     {item.weightage}%
                   </td>
-                  <td className="px-6 py-4 text-right font-medium text-[var(--text-primary)] tabular-nums">
-                    {formatINR(item.plannedAmount)}
+                  <td className="px-4 py-4 text-right font-medium text-[var(--text-primary)] tabular-nums">
+                    {formatINR(allocation)}
                   </td>
-                  <td className="px-6 py-4 text-right font-semibold text-[var(--text-primary)] tabular-nums">
-                    {formatINR(item.actualAmount)}
+                  <td className="px-4 py-4 text-right font-medium text-[var(--text-secondary)] tabular-nums">
+                    {prevPending > 0 ? formatINR(prevPending) : '—'}
+                  </td>
+                  <td className="px-4 py-4 text-right font-semibold text-[var(--accent-text)] tabular-nums">
+                    {formatINR(available)}
+                  </td>
+                  <td className="px-4 py-4 text-right font-semibold text-[var(--text-primary)] tabular-nums">
+                    {formatINR(actual)}
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums">
                     {isItemComplete ? (
@@ -88,13 +102,19 @@ export const InvestmentTable: React.FC<InvestmentTableProps> = ({
               <td className="px-6 py-4 font-semibold text-[var(--text-primary)]" colSpan={2}>
                 Total
               </td>
-              <td className="px-6 py-4 text-right text-xs font-medium text-[var(--text-secondary)] tabular-nums">
+              <td className="px-4 py-4 text-right text-xs font-medium text-[var(--text-secondary)] tabular-nums">
                 100%
               </td>
-              <td className="px-6 py-4 text-right font-bold text-[var(--text-primary)] tabular-nums">
-                {formatINR(totalPlanned)}
+              <td className="px-4 py-4 text-right font-bold text-[var(--text-primary)] tabular-nums">
+                {formatINR(totalAllocation)}
               </td>
-              <td className="px-6 py-4 text-right font-bold text-[var(--accent-text)] tabular-nums">
+              <td className="px-4 py-4 text-right font-bold text-[var(--text-secondary)] tabular-nums">
+                {formatINR(totalAvailable - totalAllocation)}
+              </td>
+              <td className="px-4 py-4 text-right font-bold text-[var(--accent-text)] tabular-nums">
+                {formatINR(totalAvailable)}
+              </td>
+              <td className="px-4 py-4 text-right font-bold text-[var(--text-primary)] tabular-nums">
                 {formatINR(totalActual)}
               </td>
               <td className="px-6 py-4 text-right font-bold text-[var(--text-secondary)] tabular-nums">
@@ -108,8 +128,12 @@ export const InvestmentTable: React.FC<InvestmentTableProps> = ({
       {/* Mobile Stacked Cards View */}
       <div className="sm:hidden divide-y divide-[var(--border-subtle)]">
         {investments.map((item) => {
-          const itemRemaining = Math.max(0, item.plannedAmount - item.actualAmount);
-          const isItemComplete = item.actualAmount >= item.plannedAmount && item.plannedAmount > 0;
+          const allocation = item.monthlyAllocation ?? item.normalPlannedAmount ?? 0;
+          const prevPending = item.previousPending ?? item.previousMonthPending ?? 0;
+          const available = item.availableAmount ?? item.plannedAmount ?? 0;
+          const actual = item.actualAmount ?? 0;
+          const itemRemaining = item.pendingAmount ?? Math.max(0, available - actual);
+          const isItemComplete = actual >= available && available > 0;
 
           return (
             <div key={item.id} className="p-4 space-y-3">
@@ -133,17 +157,28 @@ export const InvestmentTable: React.FC<InvestmentTableProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border-subtle)] text-xs">
+              <div className="grid grid-cols-4 gap-2 pt-2 border-t border-[var(--border-subtle)] text-xs">
                 <div>
-                  <span className="text-[var(--text-secondary)]">Planned</span>
+                  <span className="text-[var(--text-secondary)]">Allocated</span>
                   <p className="font-semibold text-[var(--text-primary)] mt-0.5 tabular-nums">
-                    {formatINR(item.plannedAmount)}
+                    {formatINR(allocation)}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[var(--text-secondary)]">Actual</span>
+                  <span className="text-[var(--text-secondary)]">Available</span>
                   <p className="font-semibold text-[var(--accent-text)] mt-0.5 tabular-nums">
-                    {formatINR(item.actualAmount)}
+                    {formatINR(available)}
+                  </p>
+                  {prevPending > 0 && (
+                    <span className="text-[10px] text-[var(--text-secondary)]">
+                      (+{formatINR(prevPending)})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[var(--text-secondary)]">Actual</span>
+                  <p className="font-semibold text-[var(--text-primary)] mt-0.5 tabular-nums">
+                    {formatINR(actual)}
                   </p>
                 </div>
                 <div>
@@ -160,8 +195,8 @@ export const InvestmentTable: React.FC<InvestmentTableProps> = ({
         {/* Mobile Total Card */}
         <div className="p-4 bg-[var(--bg-surface-subtle)] space-y-2">
           <div className="flex justify-between items-center text-sm font-semibold text-[var(--text-primary)]">
-            <span>Total Target</span>
-            <span className="tabular-nums">{formatINR(totalPlanned)}</span>
+            <span>Total Available</span>
+            <span className="tabular-nums">{formatINR(totalAvailable)}</span>
           </div>
           <div className="flex justify-between items-center text-xs text-[var(--text-secondary)]">
             <span>Total Invested</span>

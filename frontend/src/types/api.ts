@@ -14,10 +14,19 @@ export interface MonthlyInvestmentItem {
   name: string;
   category: InvestmentCategory;
   weightage: number;
+  monthlyAllocation?: number;     // Current month's base SIP allocation (S * weightage / 100)
+  previousPending?: number;       // Accumulated pending balance from previous months for THIS investment
+  availableAmount?: number;       // monthlyAllocation + previousPending
+  currentPrice?: number;         // Current unit/share price if provided
+  sharesToBuy?: number;          // Whole units/shares: floor(availableAmount / currentPrice)
+  plannedPurchaseAmount?: number;// sharesToBuy * currentPrice
+  actualAmount: number;          // Actual amount invested this month
+  pendingAmount?: number;        // Resulting pending balance: availableAmount - actualAmount
+
+  // Backward-compatibility aliases
   normalPlannedAmount?: number;
   previousMonthPending?: number;
   plannedAmount: number;
-  actualAmount: number;
 }
 
 export interface DashboardResponse {
@@ -29,6 +38,7 @@ export interface DashboardResponse {
   baseMonthlyAmount: number;
   previousCarryForward: number;
   currentMonthTarget: number;
+  totalAvailableAmount?: number;
   currentMonthActual: number;
   currentMonthRemaining: number;
   investments: MonthlyInvestmentItem[];

@@ -113,8 +113,8 @@ export default function Investments() {
   };
 
   const totalActual = Object.values(actualInputs).reduce((sum, val) => sum + (val || 0), 0);
-  const totalPlanned = data?.currentMonthTarget ?? 0;
-  const remaining = Math.max(0, totalPlanned - totalActual);
+  const totalAvailable = data?.totalAvailableAmount ?? data?.investments.reduce((sum, i) => sum + (i.availableAmount ?? i.plannedAmount ?? 0), 0) ?? 0;
+  const remaining = Math.max(0, totalAvailable - totalActual);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -125,7 +125,7 @@ export default function Investments() {
             Investments
           </h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Track and record your actual monthly investment activity
+            Record actual whole-share purchases and track stock-wise pending balances
           </p>
         </div>
 
@@ -164,37 +164,39 @@ export default function Investments() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-card transition-colors">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                This Month Target
+                Monthly SIP Commitment
               </span>
               <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">
-                {formatINR(data.currentMonthTarget)}
+                {formatINR(data.baseMonthlyAmount || data.currentMonthTarget)}
               </p>
               <span className="text-xs text-[var(--text-secondary)]">
-                {formatINR(data.baseMonthlyAmount)} base + {formatINR(data.previousCarryForward)} carry
+                {data.previousCarryForward > 0
+                  ? `+ ${formatINR(data.previousCarryForward)} accumulated pending available`
+                  : 'Zero previous pending balance'}
               </span>
             </div>
 
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Total Invested
+                Total Available to Invest
               </span>
               <p className="text-2xl font-bold text-[var(--accent-text)] mt-1 tabular-nums">
+                {formatINR(totalAvailable)}
+              </p>
+              <span className="text-xs text-[var(--text-secondary)]">
+                Current month allocation + accumulated pending
+              </span>
+            </div>
+
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                Total Actual Invested
+              </span>
+              <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">
                 {formatINR(totalActual)}
               </p>
               <span className="text-xs text-[var(--text-secondary)]">
-                Sum of current month actuals
-              </span>
-            </div>
-
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Remaining to Target
-              </span>
-              <p className="text-2xl font-bold text-[var(--text-secondary)] mt-1 tabular-nums">
-                {formatINR(remaining)}
-              </p>
-              <span className="text-xs text-[var(--text-secondary)]">
-                Target minus Actual
+                Remaining pending: {formatINR(remaining)}
               </span>
             </div>
           </div>
@@ -203,20 +205,25 @@ export default function Investments() {
           <div className="rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-card overflow-hidden transition-colors">
             <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-[var(--text-primary)]">Record Actuals</h2>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">Record Purchases</h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Enter the actual amounts invested for each asset
+                  Enter whole-share purchase amounts for each individual asset
                 </p>
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]">
-                {data.investments?.length || 0} Items
+                {data.investments?.length || 0} Assets
               </span>
             </div>
 
             <div className="divide-y divide-[var(--border-subtle)]">
               {data.investments?.map((item) => {
                 const itemError = inputErrors[item.id];
-                const isItemDone = (actualInputs[item.id] ?? 0) >= item.plannedAmount && item.plannedAmount > 0;
+                const allocation = item.monthlyAllocation ?? item.normalPlannedAmount ?? 0;
+                const prevPending = item.previousPending ?? item.previousMonthPending ?? 0;
+                const available = item.availableAmount ?? item.plannedAmount ?? 0;
+                const enteredActual = actualInputs[item.id] ?? 0;
+                const resultingPending = Math.max(0, available - enteredActual);
+                const isItemDone = enteredActual >= available && available > 0;
 
                 return (
                   <div
@@ -235,39 +242,60 @@ export default function Investments() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
                         <span className="px-2 py-0.5 rounded bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
                           {item.category}
                         </span>
                         <span>·</span>
-                        <span className="font-medium tabular-nums">{item.weightage}% weightage</span>
-                        <span>·</span>
-                        <span className="font-medium">Planned: {formatINR(item.plannedAmount)}</span>
+                        <span className="font-medium tabular-nums">{item.weightage}% ({formatINR(allocation)})</span>
+                        {prevPending > 0 && (
+                          <>
+                            <span>+</span>
+                            <span className="font-medium text-[var(--accent-text)] tabular-nums">
+                              {formatINR(prevPending)} pending
+                            </span>
+                          </>
+                        )}
+                        <span>=</span>
+                        <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                          {formatINR(available)} available
+                        </span>
                       </div>
                     </div>
 
-                    {/* Actual Amount Input Control */}
+                    {/* Actual Amount Input Control & Resulting Pending */}
                     <div className="flex flex-col sm:items-end gap-1">
-                      <div className="relative flex items-center">
-                        <span className="absolute left-3 text-sm font-semibold text-[var(--text-secondary)]">
-                          ₹
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={actualInputs[item.id] === undefined || actualInputs[item.id] === 0 ? '' : actualInputs[item.id]}
-                          onChange={(e) => handleInputChange(item.id, e.target.value)}
-                          disabled={saving}
-                          placeholder="0.00"
-                          aria-label={`Actual amount for ${item.name}`}
-                          className={`w-full sm:w-44 pl-7 pr-3 py-2 text-right font-semibold text-sm rounded-xl border bg-[var(--bg-surface)] text-[var(--text-primary)] tabular-nums transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
-                            itemError
-                              ? 'border-[var(--danger)] focus:ring-[var(--danger)]'
-                              : 'border-[var(--border-strong)]'
-                          }`}
-                        />
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-sm font-semibold text-[var(--text-secondary)]">
+                            ₹
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={actualInputs[item.id] === undefined || actualInputs[item.id] === 0 ? '' : actualInputs[item.id]}
+                            onChange={(e) => handleInputChange(item.id, e.target.value)}
+                            disabled={saving}
+                            placeholder="0.00"
+                            aria-label={`Actual amount for ${item.name}`}
+                            className={`w-full sm:w-40 pl-7 pr-3 py-2 text-right font-semibold text-sm rounded-xl border bg-[var(--bg-surface)] text-[var(--text-primary)] tabular-nums transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
+                              itemError
+                                ? 'border-[var(--danger)] focus:ring-[var(--danger)]'
+                                : 'border-[var(--border-strong)]'
+                            }`}
+                          />
+                        </div>
                       </div>
+
+                      <div className="text-xs text-[var(--text-secondary)]">
+                        <span>New Pending: </span>
+                        <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                          {formatINR(resultingPending)}
+                        </span>
+                      </div>
+
                       {itemError && (
                         <span className="text-xs font-medium text-[var(--danger)]">
                           {itemError}
@@ -282,7 +310,7 @@ export default function Investments() {
             {/* Bottom Action Footer */}
             <div className="px-6 py-4 bg-[var(--bg-surface-subtle)] border-t border-[var(--border-subtle)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <span className="text-xs text-[var(--text-secondary)]">
-                Updates sync directly to your real Google Spreadsheet in real time.
+                Recorded purchases update stock-wise pending balances for subsequent months in real time.
               </span>
 
               <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
